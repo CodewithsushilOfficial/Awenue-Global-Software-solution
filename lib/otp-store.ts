@@ -31,10 +31,16 @@ if (process.env.NODE_ENV !== "production") {
 
 /** Helper to wrap async operations with a safety timeout */
 function withTimeout<T>(promise: Promise<T>, ms = 2000): Promise<T> {
-  const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("Operation timeout")), ms)
-  );
-  return Promise.race([promise, timeout]);
+  let timer: NodeJS.Timeout;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("Operation timeout")), ms);
+  });
+
+  promise.catch(() => {});
+
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
 }
 
 /** Hash a raw OTP value with SHA-256 */

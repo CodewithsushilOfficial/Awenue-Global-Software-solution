@@ -1,26 +1,17 @@
 import { initializeApp, getApps, cert, type App } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { getAuth, type Auth } from "firebase-admin/auth";
-import crypto from "crypto";
 
 let adminApp: App | null = null;
 let adminDbInstance: Firestore | null = null;
 let adminAuthInstance: Auth | null = null;
 
-/** Test if a string is a real, valid RSA private key that can perform crypto signing */
+/** Test if a string has the structure of a valid PEM RSA private key */
 function isValidRsaPrivateKey(rawKey?: string): boolean {
   if (!rawKey || typeof rawKey !== "string") return false;
-  if (!rawKey.includes("BEGIN PRIVATE KEY") || rawKey.includes("YOUR_PRIVATE_KEY_HERE")) return false;
-  try {
-    const formattedKey = rawKey.trim().replace(/^["']|["']$/g, "").replace(/\\n/g, "\n");
-    const signer = crypto.createSign("SHA256");
-    signer.update("awenue_rsa_validation_test");
-    signer.sign(formattedKey);
-    return true;
-  } catch (err) {
-    console.warn("[Firebase Admin] RSA private key signature validation failed:", err instanceof Error ? err.message : err);
-    return false;
-  }
+  const trimmed = rawKey.trim();
+  if (!trimmed.includes("BEGIN PRIVATE KEY") || trimmed.includes("YOUR_PRIVATE_KEY_HERE")) return false;
+  return trimmed.length > 60;
 }
 
 export function getAdminApp(): App | null {

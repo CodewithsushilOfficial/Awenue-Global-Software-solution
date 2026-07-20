@@ -310,7 +310,7 @@ export default function AdminLoginPage() {
                   suppressHydrationWarning
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter admin email (codewithsushil7236@gmail.com)"
+                  placeholder="Enter admin email"
                   className="w-full bg-surface-base border border-white/10 pl-10 pr-4 py-3.5 rounded-xl text-sm text-white placeholder-text-text-muted/60 outline-none focus:border-accent transition-colors"
                 />
                 <Mail size={16} className="absolute left-3.5 top-4 text-text-muted" />
@@ -332,7 +332,7 @@ export default function AdminLoginPage() {
                   suppressHydrationWarning
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter admin password (Sushil@7236)"
+                  placeholder="Enter admin password"
                   className="w-full bg-surface-base border border-white/10 pl-10 pr-4 py-3.5 rounded-xl text-sm text-white placeholder-text-text-muted/60 outline-none focus:border-accent transition-colors"
                 />
                 <Lock size={16} className="absolute left-3.5 top-4 text-text-muted" />

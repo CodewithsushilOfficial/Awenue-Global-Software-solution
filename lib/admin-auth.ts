@@ -160,6 +160,7 @@ export async function getActiveAdminByEmail(
         .where("emailNormalized", "==", normalizedEmail)
         .limit(1)
         .get();
+      dbQueryPromise.catch(() => {});
 
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("Firestore lookup timeout")), 2500)
@@ -237,6 +238,8 @@ export async function getAdminById(
     if (!db) return getEnvAdmin(PERMANENT_ADMIN_EMAIL);
 
     const dbQueryPromise = db.collection("admins").doc(adminId).get();
+    dbQueryPromise.catch(() => {});
+
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("Firestore lookup timeout")), 2500)
     );

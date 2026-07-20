@@ -117,11 +117,16 @@ export async function sendAdminOtpEmail(email: string, otpCode: string): Promise
       html,
     });
 
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Email delivery socket timeout")), 10000)
-    );
+    sendPromise.catch(() => {});
 
-    const info = (await Promise.race([sendPromise, timeoutPromise])) as nodemailer.SentMessageInfo;
+    let timer: NodeJS.Timeout;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Email delivery socket timeout")), 10000);
+    });
+
+    const info = (await Promise.race([sendPromise, timeoutPromise]).finally(() => {
+      if (timer) clearTimeout(timer);
+    })) as nodemailer.SentMessageInfo;
 
     console.log(`[Nodemailer] Admin OTP email sent successfully to ${email}. MessageID:`, info?.messageId);
 
@@ -432,11 +437,16 @@ export async function sendAdminInviteEmail(
       html,
     });
 
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Email delivery timeout")), 10000)
-    );
+    sendPromise.catch(() => {});
 
-    const info = (await Promise.race([sendPromise, timeoutPromise])) as nodemailer.SentMessageInfo;
+    let timer: NodeJS.Timeout;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Email delivery timeout")), 10000);
+    });
+
+    const info = (await Promise.race([sendPromise, timeoutPromise]).finally(() => {
+      if (timer) clearTimeout(timer);
+    })) as nodemailer.SentMessageInfo;
     console.log(`[Nodemailer] Admin invite email sent to ${data.recipientEmail}. MessageID:`, info?.messageId);
 
     return { success: true };
