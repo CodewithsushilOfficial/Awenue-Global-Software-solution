@@ -12,31 +12,31 @@ import { db } from "@/lib/firebase";
 // ─── HERO SLIDE DATA ──────────────────────────────────────────────────────────
 const heroSlides = [
   {
-    src: "/hero-dev-team.png",
+    src: "/hero-dev-team.jpg",
     alt: "AWENUE software and web developer team collaborating in emerald green tech studio",
     kenBurns: "ken-zoom-in",
     label: "Software Development",
   },
   {
-    src: "/hero-ai-workflow.png",
+    src: "/hero-ai-workflow.jpg",
     alt: "AI and automation workflows with green nodes and machine learning metrics",
     kenBurns: "ken-pan-right",
     label: "AI Automation",
   },
   {
-    src: "/hero-mobile-green.png",
+    src: "/hero-mobile-green.jpg",
     alt: "Premium Android and iOS mobile apps showcase with green branded UI",
     kenBurns: "ken-pan-left",
     label: "Mobile Apps",
   },
   {
-    src: "/hero-growth-green.png",
+    src: "/hero-growth-green.jpg",
     alt: "Business growth command center with green KPI analytics dashboards",
     kenBurns: "ken-zoom-out",
     label: "Business Growth",
   },
   {
-    src: "/hero-consultation.png",
+    src: "/hero-consultation.jpg",
     alt: "AWENUE professional consultation and digital strategy session",
     kenBurns: "ken-zoom-in-top",
     label: "Expert Consultation",
