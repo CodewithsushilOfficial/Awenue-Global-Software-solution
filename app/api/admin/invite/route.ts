@@ -184,20 +184,24 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Missing admin ID or email parameter." }, { status: 400 });
     }
 
+    const db = getAdminDb();
     let docId = id;
-    if (!docId && email) {
-      const snap = await adminDb
-        .collection("admins")
-        .where("email", "==", email.toLowerCase().trim())
-        .limit(1)
-        .get();
-      if (!snap.empty) {
-        docId = snap.docs[0].id;
-      }
-    }
 
-    if (docId) {
-      await adminDb.collection("admins").doc(docId).delete();
+    if (db) {
+      if (!docId && email) {
+        const snap = await db
+          .collection("admins")
+          .where("email", "==", email.toLowerCase().trim())
+          .limit(1)
+          .get();
+        if (!snap.empty) {
+          docId = snap.docs[0].id;
+        }
+      }
+
+      if (docId) {
+        await db.collection("admins").doc(docId).delete();
+      }
     }
 
     return NextResponse.json(
