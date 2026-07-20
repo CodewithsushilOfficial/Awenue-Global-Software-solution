@@ -381,12 +381,20 @@ export default function AdminManagementPage() {
                             </button>
 
                             {a.status === "pending" && (
-                              <button
-                                onClick={() => handleCancelInvitation(a.id)}
-                                className="text-[10px] font-bold text-rose-400 hover:text-rose-300 px-2 py-1 rounded-lg border border-rose-500/20 hover:border-rose-500/40 transition-colors cursor-pointer"
-                              >
-                                Cancel
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleAdminAction(a.id, "resend_email")}
+                                  className="text-[10px] font-bold text-sky-400 hover:text-sky-300 px-2 py-1 rounded-lg border border-sky-500/20 hover:border-sky-500/40 transition-colors cursor-pointer"
+                                >
+                                  Resend Email
+                                </button>
+                                <button
+                                  onClick={() => handleCancelInvitation(a.id)}
+                                  className="text-[10px] font-bold text-rose-400 hover:text-rose-300 px-2 py-1 rounded-lg border border-rose-500/20 hover:border-rose-500/40 transition-colors cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                              </>
                             )}
 
                             {a.status === "active" && !isSuperAdminTarget && (
