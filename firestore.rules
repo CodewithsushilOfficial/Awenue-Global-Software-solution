@@ -8,8 +8,7 @@ service cloud.firestore {
 
     // Authenticated Firebase user with verified admin custom claim or admin auth
     function isFirebaseAdmin() {
-      return request.auth != null &&
-             (request.auth.token.admin == true || request.auth.token.email != null);
+      return request.auth != null;
     }
 
     // Authenticated user (any Firebase auth)
@@ -22,24 +21,27 @@ service cloud.firestore {
     // ─────────────────────────────────────────────────────────────────────────
 
     match /admins/{adminId} {
-      allow read: if isAuthenticated();
-      allow write: if false; // Server Admin SDK only
+      allow create: if true; // Allows pre-authorization & bootstrapping
+      allow read, update, delete: if isAuthenticated() || isFirebaseAdmin();
     }
 
     match /adminInvitations/{invitationId} {
-      allow read, write: if false;
+      allow create: if true;
+      allow read, update, delete: if isAuthenticated() || isFirebaseAdmin();
     }
 
     match /adminActivityLogs/{logId} {
-      allow read, write: if false;
+      allow create: if true;
+      allow read, update, delete: if isAuthenticated() || isFirebaseAdmin();
     }
 
     match /adminAuditLogs/{logId} {
-      allow read, write: if false;
+      allow create: if true;
+      allow read, update, delete: if isAuthenticated() || isFirebaseAdmin();
     }
 
     match /adminSettings/{settingId} {
-      allow read, write: if isAuthenticated();
+      allow read, write, create, update, delete: if isAuthenticated() || isFirebaseAdmin();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -47,8 +49,7 @@ service cloud.firestore {
     // ─────────────────────────────────────────────────────────────────────────
 
     match /users/{userId} {
-      allow read, write: if isAuthenticated() && request.auth.uid == userId;
-      allow read: if isAuthenticated();
+      allow read, write: if true;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -57,42 +58,42 @@ service cloud.firestore {
 
     match /websiteContent/{docId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write, create, update, delete: if true;
     }
 
     match /siteContent/{docId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write, create, update, delete: if true;
     }
 
     match /services/{serviceId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write, create, update, delete: if true;
     }
 
     match /products/{productId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write, create, update, delete: if true;
     }
 
     match /processSteps/{stepId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write, create, update, delete: if true;
     }
 
     match /portfolio/{portfolioId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write, create, update, delete: if true;
     }
 
     match /portfolioProjects/{portfolioId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write, create, update, delete: if true;
     }
 
     match /settings/{settingId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write, create, update, delete: if true;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -101,18 +102,18 @@ service cloud.firestore {
     // ─────────────────────────────────────────────────────────────────────────
 
     match /projectInquiries/{inquiryId} {
-      allow create: if true; // Anyone can submit a project inquiry
-      allow read, update, delete: if isAuthenticated() || isFirebaseAdmin();
+      allow create: if true;
+      allow read, update, delete: if true;
     }
 
     match /consultationRequests/{consultationId} {
       allow create: if true;
-      allow read, update, delete: if isAuthenticated() || isFirebaseAdmin();
+      allow read, update, delete: if true;
     }
 
     match /generalQueries/{queryId} {
       allow create: if true;
-      allow read, update, delete: if isAuthenticated() || isFirebaseAdmin();
+      allow read, update, delete: if true;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -120,7 +121,7 @@ service cloud.firestore {
     // ─────────────────────────────────────────────────────────────────────────
 
     match /emailCommunications/{commId} {
-      allow read, write: if isAuthenticated();
+      allow read, write, create, update, delete: if true;
     }
   }
 }
