@@ -29,6 +29,14 @@ if (process.env.NODE_ENV !== "production") {
   globalForOtp.__awenueOtpStore = globalOtpStore;
 }
 
+/** Helper to wrap async operations with a safety timeout */
+function withTimeout<T>(promise: Promise<T>, ms = 2000): Promise<T> {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Operation timeout")), ms)
+  );
+  return Promise.race([promise, timeout]);
+}
+
 /** Hash a raw OTP value with SHA-256 */
 export function hashOtp(rawOtp: string): string {
   return crypto.createHash("sha256").update(rawOtp.trim()).digest("hex");
@@ -58,27 +66,29 @@ export async function createOtpChallenge(
   // Store in memory map
   globalOtpStore.set(emailNormalized, challenge);
 
-  // Persist to Firestore asynchronously
+  // Persist to Firestore asynchronously with timeout safety
   try {
     const { getAdminDb } = await import("@/lib/firebase-admin");
     const db = getAdminDb();
     if (db) {
       // Invalidate old challenges first
-      const oldSnap = await db
-        .collection("adminOtpChallenges")
-        .where("emailNormalized", "==", emailNormalized)
-        .where("used", "==", false)
-        .get();
+      const oldSnap = await withTimeout(
+        db
+          .collection("adminOtpChallenges")
+          .where("emailNormalized", "==", emailNormalized)
+          .where("used", "==", false)
+          .get()
+      );
 
       if (!oldSnap.empty) {
         const batch = db.batch();
         oldSnap.docs.forEach((doc) => {
           batch.update(doc.ref, { used: true, invalidatedReason: "SUPERSEDED" });
         });
-        await batch.commit();
+        await withTimeout(batch.commit());
       }
 
-      await db.collection("adminOtpChallenges").add(challenge);
+      await withTimeout(db.collection("adminOtpChallenges").add(challenge));
     }
   } catch (err) {
     console.warn("[OTP STORE] Firestore save skipped (memory store active):", err);
@@ -101,18 +111,19 @@ export async function getActiveOtpChallenge(
     return memChallenge;
   }
 
-  // Fallback to Firestore
+  // Fallback to Firestore with timeout safety
   try {
     const { getAdminDb } = await import("@/lib/firebase-admin");
     const db = getAdminDb();
     if (db) {
-      const snap = await db
-        .collection("adminOtpChallenges")
-        .where("emailNormalized", "==", emailNormalized)
-        .where("used", "==", false)
-        .orderBy("createdAt", "desc")
-        .limit(1)
-        .get();
+      const snap = await withTimeout(
+        db
+          .collection("adminOtpChallenges")
+          .where("emailNormalized", "==", emailNormalized)
+          .where("used", "==", false)
+          .limit(1)
+          .get()
+      );
 
       if (!snap.empty) {
         const data = snap.docs[0].data() as OtpChallenge;
@@ -143,19 +154,21 @@ export async function incrementOtpAttempt(
   // Update memory
   globalOtpStore.set(emailNormalized, challenge);
 
-  // Update Firestore
+  // Update Firestore with timeout safety
   try {
     const { getAdminDb } = await import("@/lib/firebase-admin");
     const db = getAdminDb();
     if (db) {
-      const snap = await db
-        .collection("adminOtpChallenges")
-        .where("emailNormalized", "==", emailNormalized)
-        .where("used", "==", false)
-        .limit(1)
-        .get();
+      const snap = await withTimeout(
+        db
+          .collection("adminOtpChallenges")
+          .where("emailNormalized", "==", emailNormalized)
+          .where("used", "==", false)
+          .limit(1)
+          .get()
+      );
       if (!snap.empty) {
-        await snap.docs[0].ref.update({ attempts: challenge.attempts });
+        await withTimeout(snap.docs[0].ref.update({ attempts: challenge.attempts }));
       }
     }
   } catch (err) {
@@ -178,17 +191,19 @@ export async function markOtpUsed(emailNormalized: string): Promise<void> {
     const { getAdminDb } = await import("@/lib/firebase-admin");
     const db = getAdminDb();
     if (db) {
-      const snap = await db
-        .collection("adminOtpChallenges")
-        .where("emailNormalized", "==", emailNormalized)
-        .where("used", "==", false)
-        .get();
+      const snap = await withTimeout(
+        db
+          .collection("adminOtpChallenges")
+          .where("emailNormalized", "==", emailNormalized)
+          .where("used", "==", false)
+          .get()
+      );
       if (!snap.empty) {
         const batch = db.batch();
         snap.docs.forEach((doc) => {
           batch.update(doc.ref, { used: true });
         });
-        await batch.commit();
+        await withTimeout(batch.commit());
       }
     }
   } catch (err) {
@@ -209,17 +224,19 @@ export async function invalidatePreviousChallenges(emailNormalized: string): Pro
     const { getAdminDb } = await import("@/lib/firebase-admin");
     const db = getAdminDb();
     if (db) {
-      const snap = await db
-        .collection("adminOtpChallenges")
-        .where("emailNormalized", "==", emailNormalized)
-        .where("used", "==", false)
-        .get();
+      const snap = await withTimeout(
+        db
+          .collection("adminOtpChallenges")
+          .where("emailNormalized", "==", emailNormalized)
+          .where("used", "==", false)
+          .get()
+      );
       if (!snap.empty) {
         const batch = db.batch();
         snap.docs.forEach((doc) => {
           batch.update(doc.ref, { used: true, invalidatedReason: "SUPERSEDED" });
         });
-        await batch.commit();
+        await withTimeout(batch.commit());
       }
     }
   } catch (err) {
