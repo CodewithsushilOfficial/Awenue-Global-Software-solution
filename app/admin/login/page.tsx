@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
   Mail,
+  Lock,
   Loader2,
   ArrowRight,
   ShieldCheck,
@@ -19,12 +20,13 @@ export default function AdminLoginPage() {
   const router = useRouter();
   const { isAdmin, loading, refreshSession } = useAuth();
 
-  // Step state: "email" | "otp"
-  const [step, setStep] = useState<"email" | "otp">("email");
-  const [email, setEmail] = useState("");
+  // Step state: "credentials" | "otp"
+  const [step, setStep] = useState<"credentials" | "otp">("credentials");
+  const [email, setEmail] = useState("codewithsushil7236@gmail.com");
+  const [password, setPassword] = useState("");
   const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [challengeToken, setChallengeToken] = useState<string>("");
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
@@ -79,11 +81,15 @@ export default function AdminLoginPage() {
     }
   };
 
-  // STEP 1: Request Email OTP Code
+  // STEP 1: Verify Email + Password & Request OTP Code
   const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !email.includes("@")) {
       setErrorMessage("Please enter a valid admin email address.");
+      return;
+    }
+    if (!password) {
+      setErrorMessage("Please enter your admin password.");
       return;
     }
 
@@ -92,17 +98,13 @@ export default function AdminLoginPage() {
     setInfoMessage(null);
 
     try {
-      // Primary OTP Endpoint
-      let result = await safeFetchJson("/api/admin/otp/request", { email });
-
-      // Secondary Fallback Endpoint if primary fails or returns non-JSON/404
-      if (!result.ok && result.status !== 429) {
-        console.warn("Primary OTP endpoint failed, attempting fallback endpoint...");
-        result = await safeFetchJson("/api/admin/send-otp", { email });
-      }
+      const result = await safeFetchJson("/api/admin/otp/request", {
+        email,
+        password,
+      });
 
       if (!result.ok) {
-        throw new Error(result.data?.error || "Failed to request verification code. Please try again.");
+        throw new Error(result.data?.error || "Invalid admin email or password.");
       }
 
       if (result.data?.challengeToken) {
@@ -145,7 +147,7 @@ export default function AdminLoginPage() {
         throw new Error(result.data?.error || "Invalid verification code.");
       }
 
-      // Refresh session state from server cookie (set by verify endpoint)
+      // Refresh session state from server cookie
       await refreshSession();
       router.push("/admin/dashboard");
     } catch (err: unknown) {
@@ -166,10 +168,10 @@ export default function AdminLoginPage() {
     setInfoMessage(null);
 
     try {
-      let result = await safeFetchJson("/api/admin/otp/request", { email });
-      if (!result.ok && result.status !== 429) {
-        result = await safeFetchJson("/api/admin/send-otp", { email });
-      }
+      const result = await safeFetchJson("/api/admin/otp/request", {
+        email,
+        password,
+      });
 
       if (!result.ok) {
         throw new Error(result.data?.error || "Failed to resend verification code.");
@@ -187,7 +189,7 @@ export default function AdminLoginPage() {
     }
   };
 
-  // OTP Input handlers: Auto-focus, Paste, Backspace navigation, and Autofill support
+  // OTP Input handlers: Auto-focus, Paste, Backspace navigation
   const handleOtpChange = (index: number, value: string) => {
     const digitsOnly = value.replace(/\D/g, "");
     if (!digitsOnly) {
@@ -241,10 +243,10 @@ export default function AdminLoginPage() {
   const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
     const pastedData = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
-    if (pastedData) {
-      const newDigits = [...otpDigits];
-      for (let i = 0; i < 6; i++) {
-        newDigits[i] = pastedData[i] || "";
+    if (pastedData.length > 0) {
+      const newDigits = ["", "", "", "", "", ""];
+      for (let i = 0; i < pastedData.length; i++) {
+        newDigits[i] = pastedData[i];
       }
       setOtpDigits(newDigits);
       const targetIndex = Math.min(pastedData.length, 5);
@@ -265,15 +267,15 @@ export default function AdminLoginPage() {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-accent/15 border border-accent/30 text-accent mb-4">
-            {step === "email" ? <ShieldCheck size={24} /> : <KeyRound size={24} />}
+            {step === "credentials" ? <ShieldCheck size={24} /> : <KeyRound size={24} />}
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white mb-2">
-            {step === "email" ? "Welcome Back" : "Verify Your Identity"}
+            {step === "credentials" ? "Welcome Back" : "Verify Your Identity"}
           </h1>
           <p className="text-xs sm:text-sm text-text-muted leading-relaxed">
-            {step === "email"
-              ? "Sign in to manage your AWENUE website and business inquiries."
-              : "Enter the verification code sent to your registered email address."}
+            {step === "credentials"
+              ? "Sign in with your Admin Email & Password to request 2FA verification."
+              : `Enter the 6-digit code sent to ${email}`}
           </p>
         </div>
 
@@ -290,9 +292,9 @@ export default function AdminLoginPage() {
           </div>
         )}
 
-        {step === "email" ? (
-          /* STEP 1: EMAIL ADDRESS FORM */
-          <form onSubmit={handleRequestOtp} className="space-y-5">
+        {step === "credentials" ? (
+          /* STEP 1: EMAIL & PASSWORD FORM */
+          <form onSubmit={handleRequestOtp} className="space-y-4">
             <div>
               <label
                 htmlFor="admin-email"
@@ -308,22 +310,44 @@ export default function AdminLoginPage() {
                   suppressHydrationWarning
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your registered admin email"
+                  placeholder="Enter admin email (codewithsushil7236@gmail.com)"
                   className="w-full bg-surface-base border border-white/10 pl-10 pr-4 py-3.5 rounded-xl text-sm text-white placeholder-text-text-muted/60 outline-none focus:border-accent transition-colors"
                 />
                 <Mail size={16} className="absolute left-3.5 top-4 text-text-muted" />
               </div>
             </div>
 
+            <div>
+              <label
+                htmlFor="admin-password"
+                className="text-[11px] font-extrabold text-text-muted uppercase tracking-wider block mb-1.5"
+              >
+                Admin Password
+              </label>
+              <div className="relative">
+                <input
+                  id="admin-password"
+                  type="password"
+                  required
+                  suppressHydrationWarning
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter admin password (Sushil@7236)"
+                  className="w-full bg-surface-base border border-white/10 pl-10 pr-4 py-3.5 rounded-xl text-sm text-white placeholder-text-text-muted/60 outline-none focus:border-accent transition-colors"
+                />
+                <Lock size={16} className="absolute left-3.5 top-4 text-text-muted" />
+              </div>
+            </div>
+
             <button
               type="submit"
               disabled={isSubmitting || loading}
-              className="w-full bg-accent text-surface-base font-extrabold py-3.5 rounded-xl hover:bg-accent-hover transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-glow disabled:opacity-50 mt-2"
+              className="w-full bg-accent text-surface-base font-extrabold py-3.5 rounded-xl hover:bg-accent-hover transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-glow disabled:opacity-50 mt-4"
             >
               {isSubmitting ? (
                 <>
                   <Loader2 className="animate-spin" size={18} />
-                  Sending Verification Code...
+                  Verifying Credentials & Sending OTP...
                 </>
               ) : (
                 <>
@@ -350,24 +374,15 @@ export default function AdminLoginPage() {
                     type="text"
                     inputMode="numeric"
                     pattern="[0-9]*"
-                    maxLength={idx === 0 ? 6 : 1}
-                    autoComplete={idx === 0 ? "one-time-code" : "off"}
-                    suppressHydrationWarning
+                    maxLength={6}
                     value={digit}
-                    onFocus={(e) => e.target.select()}
                     onChange={(e) => handleOtpChange(idx, e.target.value)}
                     onKeyDown={(e) => handleOtpKeyDown(idx, e)}
                     onPaste={handleOtpPaste}
-                    className={`w-full aspect-[4/5] sm:aspect-square max-h-14 bg-surface-base border text-center text-xl sm:text-2xl font-bold font-mono rounded-xl sm:rounded-2xl outline-none transition-all duration-200 ${
-                      digit
-                        ? "border-accent text-accent shadow-glow bg-accent/5 ring-1 ring-accent/40"
-                        : "border-white/15 text-white focus:border-accent focus:ring-2 focus:ring-accent/40 focus:bg-surface-raised"
-                    }`}
-                    aria-label={`Digit ${idx + 1}`}
+                    className="w-full h-12 text-center text-xl font-black bg-surface-base border border-white/15 focus:border-accent focus:ring-1 focus:ring-accent rounded-xl text-white outline-none transition-all"
                   />
                 ))}
               </div>
-
               <p className="text-[11px] text-text-muted text-center">
                 Sent to: <strong className="text-white">{email}</strong>
               </p>
@@ -391,19 +406,19 @@ export default function AdminLoginPage() {
               )}
             </button>
 
-            {/* Resend Cooldown Timer & Change Email */}
+            {/* Resend Cooldown Timer & Change Credentials */}
             <div className="flex items-center justify-between pt-2 text-xs">
               <button
                 type="button"
                 onClick={() => {
-                  setStep("email");
+                  setStep("credentials");
                   setErrorMessage(null);
                   setInfoMessage(null);
                 }}
                 className="text-text-muted hover:text-white transition-colors flex items-center gap-1 cursor-pointer"
               >
                 <ArrowLeft size={13} />
-                <span>Change Email</span>
+                <span>Change Email / Password</span>
               </button>
 
               <button

@@ -1,10 +1,27 @@
 import { initializeApp, getApps, cert, type App } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { getAuth, type Auth } from "firebase-admin/auth";
+import crypto from "crypto";
 
 let adminApp: App | null = null;
 let adminDbInstance: Firestore | null = null;
 let adminAuthInstance: Auth | null = null;
+
+/** Test if a string is a real, valid RSA private key that can perform crypto signing */
+function isValidRsaPrivateKey(rawKey?: string): boolean {
+  if (!rawKey || typeof rawKey !== "string") return false;
+  if (!rawKey.includes("BEGIN PRIVATE KEY") || rawKey.includes("YOUR_PRIVATE_KEY_HERE")) return false;
+  try {
+    const formattedKey = rawKey.trim().replace(/^["']|["']$/g, "").replace(/\\n/g, "\n");
+    const signer = crypto.createSign("SHA256");
+    signer.update("awenue_rsa_validation_test");
+    signer.sign(formattedKey);
+    return true;
+  } catch (err) {
+    console.warn("[Firebase Admin] RSA private key signature validation failed:", err instanceof Error ? err.message : err);
+    return false;
+  }
+}
 
 export function getAdminApp(): App | null {
   if (adminApp) return adminApp;
@@ -21,22 +38,16 @@ export function getAdminApp(): App | null {
     const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
     const rawPrivateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY;
 
-    const isValidPrivateKey =
-      rawPrivateKey &&
-      typeof rawPrivateKey === "string" &&
-      rawPrivateKey.includes("BEGIN PRIVATE KEY") &&
-      !rawPrivateKey.includes("YOUR_PRIVATE_KEY_HERE");
-
     const hasValidClientEmail =
       clientEmail &&
       typeof clientEmail === "string" &&
       clientEmail.includes("@") &&
       !clientEmail.includes("xxxxx");
 
-    // Only initialize Admin SDK if valid service account credentials are provided.
-    // Initializing without credentials on Vercel/non-GCP environments causes
-    // Firestore queries to hang waiting for the GCP metadata server, resulting in 500 timeouts.
-    if (projectId && hasValidClientEmail && isValidPrivateKey) {
+    const hasValidKey = isValidRsaPrivateKey(rawPrivateKey);
+
+    // Only initialize Admin SDK if valid, cryptographically testable service account credentials exist.
+    if (projectId && hasValidClientEmail && hasValidKey && rawPrivateKey) {
       try {
         const privateKey = rawPrivateKey.trim().replace(/^["']|["']$/g, "").replace(/\\n/g, "\n");
         adminApp = initializeApp({
@@ -53,7 +64,7 @@ export function getAdminApp(): App | null {
       }
     }
 
-    console.warn("[Firebase Admin] No valid service account credentials found. Server-side Admin SDK is inactive (ENV fallback active).");
+    console.warn("[Firebase Admin] Service account credentials invalid or inactive. Operating in ENV fallback mode.");
     return null;
   } catch (err) {
     console.warn("[Firebase Admin] App init exception:", err);
