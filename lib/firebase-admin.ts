@@ -5,6 +5,7 @@ import type { Auth } from "firebase-admin/auth";
 let adminApp: App | null = null;
 let adminDbInstance: Firestore | null = null;
 let adminAuthInstance: Auth | null = null;
+let hasAdminCert = false;
 
 /**
  * Safely normalize PEM private key format.
@@ -65,6 +66,11 @@ function getProjectId(): string {
   return "awenue-global";
 }
 
+export function isAdminCertAvailable(): boolean {
+  getAdminApp();
+  return hasAdminCert;
+}
+
 export function getAdminApp(): App | null {
   if (adminApp) return adminApp;
   try {
@@ -92,6 +98,7 @@ export function getAdminApp(): App | null {
             privateKey,
           }),
         });
+        hasAdminCert = true;
         console.log("[Firebase Admin] Service account initialized with cert.");
         return adminApp;
       } catch (err) {
@@ -99,10 +106,11 @@ export function getAdminApp(): App | null {
       }
     }
 
-    // Fallback init with Project ID so Firestore instance is always available
+    // Fallback init with Project ID
     if (projectId) {
       try {
         adminApp = initializeApp({ projectId });
+        hasAdminCert = false;
         console.log("[Firebase Admin] Initialized in Project ID fallback mode:", projectId);
         return adminApp;
       } catch (err) {

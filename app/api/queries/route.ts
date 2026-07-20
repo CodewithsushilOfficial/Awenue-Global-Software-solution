@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminDb } from "@/lib/firebase-admin";
-import { collection as clientCollection, addDoc } from "firebase/firestore";
-import { db as clientDb } from "@/lib/firebase";
+import { saveToFirestoreCollection } from "@/lib/firestore-saver";
 import { sendInquiryNotificationEmail } from "@/lib/email-service";
 
 export async function POST(request: NextRequest) {
@@ -36,7 +34,6 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date().toISOString();
-    let docId = "";
 
     const queryRecord = {
       fullName,
@@ -51,15 +48,8 @@ export async function POST(request: NextRequest) {
       notificationStatus: "pending",
     };
 
-    // 1. Dual-tier Firestore persistence
-    const adminFirestore = getAdminDb();
-    if (adminFirestore) {
-      const docRef = await adminFirestore.collection("generalQueries").add(queryRecord);
-      docId = docRef.id;
-    } else {
-      const docRef = await addDoc(clientCollection(clientDb, "generalQueries"), queryRecord);
-      docId = docRef.id;
-    }
+    // 1. Save to Firestore using 3-tier persistence strategy
+    const docId = await saveToFirestoreCollection("generalQueries", queryRecord);
 
     // 2. Non-blocking Email Notification
     sendInquiryNotificationEmail({

@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { consultationRequestSchema } from "@/lib/validations";
-import { getAdminDb } from "@/lib/firebase-admin";
-import { collection as clientCollection, addDoc } from "firebase/firestore";
-import { db as clientDb } from "@/lib/firebase";
+import { saveToFirestoreCollection } from "@/lib/firestore-saver";
 import { sendInquiryNotificationEmail } from "@/lib/email-service";
 
 export async function POST(request: NextRequest) {
@@ -29,7 +27,6 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date().toISOString();
-    let docId = "";
 
     const consultationRecord = {
       fullName: data.fullName,
@@ -45,15 +42,8 @@ export async function POST(request: NextRequest) {
       notificationStatus: "pending",
     };
 
-    // 3. Save to Firestore (Try Admin SDK first, fallback to Client SDK)
-    const adminFirestore = getAdminDb();
-    if (adminFirestore) {
-      const docRef = await adminFirestore.collection("consultationRequests").add(consultationRecord);
-      docId = docRef.id;
-    } else {
-      const docRef = await addDoc(clientCollection(clientDb, "consultationRequests"), consultationRecord);
-      docId = docRef.id;
-    }
+    // 3. Save to Firestore using 3-tier persistence strategy
+    const docId = await saveToFirestoreCollection("consultationRequests", consultationRecord);
 
     // 4. Non-blocking email notification trigger
     sendInquiryNotificationEmail({
