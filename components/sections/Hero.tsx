@@ -30,8 +30,8 @@ const heroSlides = [
     label: "Mobile Apps",
   },
   {
-    src: "/images/hero/scene-04-ai.jpg",
-    alt: "AI automation workflow with glowing connected nodes",
+    src: "/hero-ai-workflow.png",
+    alt: "AI automation workflow with glowing green nodes — AWENUE",
     kenBurns: "ken-zoom-out",
     label: "AI Automation",
   },
