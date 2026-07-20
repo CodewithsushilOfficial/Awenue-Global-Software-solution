@@ -3,8 +3,6 @@
 import { useState } from "react";
 import { UserPlus, Mail, User, ShieldCheck, Loader2, CheckCircle2, X } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { doc, setDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 
 interface InviteAdminModalProps {
   isOpen: boolean;
@@ -13,10 +11,10 @@ interface InviteAdminModalProps {
 }
 
 export default function InviteAdminModal({ isOpen, onClose, onSuccess }: InviteAdminModalProps) {
-  const { user } = useAuth();
+  const { admin } = useAuth();
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
-  const [role, setRole] = useState("Administrator");
+  const [role, setRole] = useState("admin");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -26,7 +24,7 @@ export default function InviteAdminModal({ isOpen, onClose, onSuccess }: InviteA
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !email.includes("@")) {
-      setErrorMessage("Please enter a valid admin email address.");
+      setErrorMessage("Please enter a valid Google email address.");
       return;
     }
 
@@ -37,71 +35,39 @@ export default function InviteAdminModal({ isOpen, onClose, onSuccess }: InviteA
     try {
       const normalizedEmail = email.trim().toLowerCase();
       const cleanFullName = fullName.trim() || "Administrator";
-      const cleanRole = role.trim() || "Administrator";
-      const nowISO = new Date().toISOString();
 
-      let apiSuccess = false;
-      let apiErrorMsg = "";
-
-      // 1. Try server API endpoint for Nodemailer email invitation
-      try {
-        const res = await fetch("/api/admin/invite", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: normalizedEmail,
-            fullName: cleanFullName,
-            role: cleanRole,
-            invitedBy: user?.email || "Super Administrator",
-          }),
-        });
-
-        const text = await res.text();
-        let data: Record<string, unknown> = {};
-        try {
-          data = JSON.parse(text);
-        } catch {
-          data = {};
-        }
-
-        if (res.ok && data.success) {
-          apiSuccess = true;
-        } else if (typeof data.error === "string") {
-          apiErrorMsg = data.error;
-        }
-      } catch (apiErr) {
-        console.warn("[InviteAdminModal] API fetch notice:", apiErr);
-      }
-
-      // 2. Client-side Firestore write to ensure admin is ALWAYS authorized
-      const adminDocId = "admin_" + normalizedEmail.replace(/[^a-z0-9]/g, "_");
-      try {
-        await setDoc(doc(db, "admins", adminDocId), {
+      const res = await fetch("/api/admin/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           email: normalizedEmail,
-          fullName: cleanFullName,
-          role: cleanRole,
-          status: "active",
-          createdAt: nowISO,
-          invitedBy: user?.email || "Super Administrator",
-        });
-      } catch (fsErr) {
-        console.warn("[InviteAdminModal] Firestore setDoc notice:", fsErr);
+          displayName: cleanFullName,
+          role,
+        }),
+      });
+
+      const text = await res.text();
+      let data: Record<string, unknown> = {};
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = {};
       }
 
-      if (apiErrorMsg && apiErrorMsg.includes("already registered")) {
-        setErrorMessage(apiErrorMsg);
-        setIsSubmitting(false);
-        return;
+      if (!res.ok) {
+        throw new Error(
+          typeof data.error === "string"
+            ? data.error
+            : "Failed to pre-authorize admin email."
+        );
       }
 
       setSuccessMessage(
-        apiSuccess
-          ? `Admin invitation sent to ${normalizedEmail} successfully!`
-          : `Admin access granted to ${normalizedEmail}! They can now log in via 2-Factor OTP.`
+        `Google email ${normalizedEmail} pre-authorized! When they sign in at /admin/login using Google, their access activates automatically.`
       );
       setEmail("");
       setFullName("");
-      setRole("Administrator");
+      setRole("admin");
 
       if (onSuccess) {
         onSuccess();
@@ -135,22 +101,22 @@ export default function InviteAdminModal({ isOpen, onClose, onSuccess }: InviteA
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-accent/15 border border-accent/30 text-accent mb-3">
             <UserPlus size={24} />
           </div>
-          <h2 className="text-xl sm:text-2xl font-black text-white">Invite New Admin</h2>
-          <p className="text-xs text-text-muted mt-1">
-            Grant AWENUE admin portal privileges to a new administrator via email invitation.
+          <h2 className="text-xl sm:text-2xl font-black text-white">Pre-Authorize Admin</h2>
+          <p className="text-xs text-text-muted mt-1 leading-relaxed">
+            Authorize a Google email address to access the AWENUE Admin Dashboard.
           </p>
         </div>
 
         {/* Feedback Messages */}
         {errorMessage && (
-          <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs font-semibold">
+          <div className="mb-4 p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs font-semibold">
             {errorMessage}
           </div>
         )}
         {successMessage && (
-          <div className="mb-4 p-3 bg-accent/10 border border-accent/30 rounded-xl text-accent text-xs font-semibold flex items-center gap-2">
-            <CheckCircle2 size={16} className="shrink-0" />
-            <span>{successMessage}</span>
+          <div className="mb-4 p-3.5 bg-accent/10 border border-accent/30 rounded-xl text-accent text-xs font-semibold flex items-start gap-2">
+            <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
+            <span className="leading-relaxed">{successMessage}</span>
           </div>
         )}
 
@@ -174,7 +140,7 @@ export default function InviteAdminModal({ isOpen, onClose, onSuccess }: InviteA
 
           <div>
             <label className="text-[11px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
-              Admin Email Address
+              Authorized Google Email
             </label>
             <div className="relative">
               <input
@@ -199,13 +165,17 @@ export default function InviteAdminModal({ isOpen, onClose, onSuccess }: InviteA
                 onChange={(e) => setRole(e.target.value)}
                 className="w-full bg-surface-base border border-white/10 pl-10 pr-4 py-3 rounded-xl text-xs text-white outline-none focus:border-accent cursor-pointer appearance-none"
               >
-                <option value="Administrator">Administrator (Full Access)</option>
-                <option value="Super Administrator">Super Administrator (All Control)</option>
-                <option value="Content Manager">Content Manager (CMS & Leads)</option>
+                <option value="admin">Administrator (Standard Access)</option>
+                <option value="content_admin">Content Admin (CMS Access)</option>
+                <option value="support_admin">Support Admin (Leads & Queries)</option>
               </select>
               <ShieldCheck size={15} className="absolute left-3.5 top-3.5 text-text-muted" />
             </div>
           </div>
+
+          <p className="text-[11px] text-text-muted leading-relaxed bg-surface-base p-3 rounded-xl border border-white/5">
+            <strong>How authorization works:</strong> No invitation email is required. When this person visits <code className="text-accent">/admin/login</code> and clicks &quot;Continue with Google&quot; using this exact Google account, their account activates automatically.
+          </p>
 
           <div className="pt-2 flex items-center justify-end gap-3">
             <button
@@ -217,18 +187,18 @@ export default function InviteAdminModal({ isOpen, onClose, onSuccess }: InviteA
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || admin?.role !== "super_admin"}
               className="bg-accent text-surface-base font-extrabold px-5 py-2.5 rounded-xl hover:bg-accent-hover transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-glow disabled:opacity-50 text-xs"
             >
               {isSubmitting ? (
                 <>
                   <Loader2 className="animate-spin" size={16} />
-                  Sending Invitation...
+                  Authorizing Email...
                 </>
               ) : (
                 <>
                   <UserPlus size={15} />
-                  <span>Send Admin Invitation</span>
+                  <span>Authorize Google Account</span>
                 </>
               )}
             </button>

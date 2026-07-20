@@ -23,9 +23,7 @@ import {
   Building,
   Calendar,
   DollarSign,
-  MessageCircle,
 } from "lucide-react";
-import EmailReplyModal from "@/components/admin/EmailReplyModal";
 
 interface ProjectInquiry {
   id: string;
@@ -55,7 +53,6 @@ export default function AdminInquiriesPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [replyModalOpen, setReplyModalOpen] = useState(false);
 
 
   const fetchInquiries = useCallback(async () => {
@@ -411,14 +408,14 @@ export default function AdminInquiriesPage() {
               </p>
             </div>
 
-            {/* Email Communication Action */}
+            {/* Actions Bar: Reply Email */}
             <div className="flex items-center justify-between border-t border-white/10 pt-4">
-              <button
-                onClick={() => setReplyModalOpen(true)}
+              <a
+                href={`mailto:${selectedInquiry.email}?subject=${encodeURIComponent(`Re: AWENUE Project Request — ${selectedInquiry.projectType}`)}`}
                 className="px-4 py-2 bg-accent text-surface-base text-xs font-extrabold rounded-xl hover:bg-accent-hover shadow-glow flex items-center gap-2 cursor-pointer"
               >
-                <MessageCircle size={15} /> Reply via Email
-              </button>
+                <Mail size={15} /> Reply via Email
+              </a>
             </div>
 
             {/* Update Form */}
@@ -473,24 +470,7 @@ export default function AdminInquiriesPage() {
         </div>
       )}
 
-      {/* Reply Modal */}
-      {selectedInquiry && (
-        <EmailReplyModal
-          isOpen={replyModalOpen}
-          onClose={() => setReplyModalOpen(false)}
-          recipientEmail={selectedInquiry.email}
-          customerName={selectedInquiry.fullName}
-          leadId={selectedInquiry.id}
-          leadType="projectInquiry"
-          defaultSubject={`Re: AWENUE Project Request — ${selectedInquiry.projectType}`}
-          onSuccess={() => {
-            fetchInquiries();
-            if (selectedInquiry) {
-              setSelectedInquiry({ ...selectedInquiry, status: "contacted" });
-            }
-          }}
-        />
-      )}
+
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmId && (

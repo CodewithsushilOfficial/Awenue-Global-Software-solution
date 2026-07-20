@@ -22,9 +22,7 @@ import {
   Phone,
   Calendar,
   HelpCircle,
-  MessageCircle,
 } from "lucide-react";
-import EmailReplyModal from "@/components/admin/EmailReplyModal";
 
 interface GeneralQuery {
   id: string;
@@ -49,7 +47,6 @@ export default function AdminGeneralQueriesPage() {
   const [statusInput, setStatusInput] = useState<GeneralQuery["status"]>("new");
   const [isUpdating, setIsUpdating] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [replyModalOpen, setReplyModalOpen] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const fetchQueries = useCallback(async () => {
@@ -372,12 +369,12 @@ export default function AdminGeneralQueriesPage() {
 
             {/* Actions Bar: Reply Email */}
             <div className="flex items-center justify-between border-t border-white/10 pt-4">
-              <button
-                onClick={() => setReplyModalOpen(true)}
+              <a
+                href={`mailto:${selectedQuery.email}?subject=${encodeURIComponent(selectedQuery.subject ? `Re: ${selectedQuery.subject}` : "Response to Your Inquiry — AWENUE")}`}
                 className="px-4 py-2 bg-accent text-surface-base text-xs font-extrabold rounded-xl hover:bg-accent-hover shadow-glow flex items-center gap-2 cursor-pointer"
               >
-                <MessageCircle size={15} /> Reply via Email
-              </button>
+                <Mail size={15} /> Reply via Email
+              </a>
             </div>
 
             <div className="space-y-4 pt-2 border-t border-white/10">
@@ -428,29 +425,6 @@ export default function AdminGeneralQueriesPage() {
             </div>
           </div>
         </div>
-      )}
-
-      {/* Reply Modal */}
-      {selectedQuery && (
-        <EmailReplyModal
-          isOpen={replyModalOpen}
-          onClose={() => setReplyModalOpen(false)}
-          recipientEmail={selectedQuery.email}
-          customerName={selectedQuery.fullName}
-          leadId={selectedQuery.id}
-          leadType="generalQuery"
-          defaultSubject={
-            selectedQuery.subject
-              ? `Re: ${selectedQuery.subject}`
-              : "Response to Your Inquiry — AWENUE"
-          }
-          onSuccess={() => {
-            fetchQueries();
-            if (selectedQuery) {
-              setSelectedQuery({ ...selectedQuery, status: "replied" });
-            }
-          }}
-        />
       )}
 
       {/* Delete Confirmation Modal */}

@@ -32,23 +32,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // OTP challenges — no direct client access (server-side only)
-    match /adminOtpChallenges/{challengeId} {
-      allow read, write: if false;
-    }
-
     // Admin activity audit logs — no direct client access
     match /adminActivityLogs/{logId} {
       allow read, write: if false;
     }
 
-    // Legacy audit log collection name — also locked
+    // Legacy audit log collection name — locked
     match /adminAuditLogs/{logId} {
-      allow read, write: if false;
-    }
-
-    // Legacy OTP collection — locked
-    match /adminOtps/{otpId} {
       allow read, write: if false;
     }
 
@@ -134,7 +124,7 @@ service cloud.firestore {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // EMAIL COMMUNICATION RECORDS
+    // COMMUNICATION RECORDS
     // ─────────────────────────────────────────────────────────────────────────
 
     match /emailCommunications/{commId} {

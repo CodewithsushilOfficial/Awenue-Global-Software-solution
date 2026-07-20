@@ -122,7 +122,7 @@ export default function AdminSettingsPage() {
         <div>
           <strong className="block font-bold mb-0.5">Security Notice — Server Environment Secrets</strong>
           <span>
-            SMTP passwords, Nodemailer auth keys, and Firebase Admin private keys are maintained strictly in server-side environment variables (`.env`) for production security and cannot be edited via frontend client forms.
+            Authentication credentials and Firebase Admin private keys are maintained strictly in server-side environment variables for production security.
           </span>
         </div>
       </div>

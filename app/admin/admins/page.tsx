@@ -234,31 +234,6 @@ export default function AdminManagementPage() {
     }
   };
 
-  // ── Resend invitation ──
-  const handleResendInvitation = async (invitationId: string) => {
-    setActionLoading("resend_" + invitationId);
-    try {
-      const res = await fetch("/api/admin/invite/resend", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ invitationId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to resend.");
-      setActionFeedback({ id: invitationId, msg: "Invitation resent!", ok: true });
-      await fetchData();
-    } catch (err) {
-      setActionFeedback({
-        id: invitationId,
-        msg: err instanceof Error ? err.message : "Failed.",
-        ok: false,
-      });
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
   // Stats
   const totalAdmins = admins.length;
   const activeAdmins = admins.filter((a) => a.status === "active").length;
@@ -473,7 +448,6 @@ export default function AdminManagementPage() {
               <tbody className="divide-y divide-border-dark/50">
                 {pendingInvitations.map((inv) => {
                   const isExpired = inv.expiresAt && new Date(inv.expiresAt) < new Date();
-                  const isResending = actionLoading === "resend_" + inv.id;
                   const isCancelling = actionLoading === "inv_" + inv.id;
 
                   return (
@@ -498,14 +472,6 @@ export default function AdminManagementPage() {
                       <td className="px-4 py-3.5">
                         {isSuperAdmin && (
                           <div className="flex items-center gap-1.5">
-                            <button
-                              disabled={!!isResending}
-                              onClick={() => handleResendInvitation(inv.id)}
-                              className="text-[10px] font-bold text-accent hover:text-accent-hover px-2 py-1 rounded-lg border border-accent/20 hover:border-accent/40 transition-colors disabled:opacity-50 flex items-center gap-1"
-                            >
-                              {isResending ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}
-                              Resend
-                            </button>
                             <button
                               disabled={!!isCancelling}
                               onClick={() => handleCancelInvitation(inv.id)}

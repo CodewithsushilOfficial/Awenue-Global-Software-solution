@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { projectInquirySchema } from "@/lib/validations";
 import { adminDb } from "@/lib/firebase-admin";
-import { sendProjectInquiryEmails } from "@/lib/email";
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,26 +41,6 @@ export async function POST(request: NextRequest) {
       adminNotes: "",
       createdAt: now,
       updatedAt: now,
-      notificationStatus: "pending",
-    });
-
-    // 4. Trigger Nodemailer Email Notifications
-    const emailResult = await sendProjectInquiryEmails({
-      fullName: data.fullName,
-      email: data.email,
-      phone: data.phone,
-      companyName: data.companyName,
-      projectType: data.projectType,
-      budget: data.budget,
-      message: data.message,
-      createdAt: now,
-    });
-
-    // Update notification status in Firestore
-    await docRef.update({
-      notificationStatus: emailResult.success ? "sent" : "failed",
-      notificationError: emailResult.error || null,
-      updatedAt: new Date().toISOString(),
     });
 
     return NextResponse.json(

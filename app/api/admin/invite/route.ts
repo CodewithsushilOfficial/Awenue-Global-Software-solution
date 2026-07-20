@@ -15,10 +15,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
 import { getAdminFromRequest, logAdminActivity } from "@/lib/admin-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
-import { sendAdminInviteEmail } from "@/lib/email";
 import {
   hasPermission,
   canAssignRole,
@@ -30,9 +28,6 @@ import {
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-// Invitation validity: 48 hours
-const INVITATION_TTL_MS = 48 * 60 * 60 * 1000;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET: List all admins + pending invitations
@@ -89,7 +84,6 @@ export async function GET(request: NextRequest) {
         invitedBy: d.invitedBy || null,
         invitedByAdminId: d.invitedByAdminId || null,
         createdAt: d.createdAt || null,
-        expiresAt: d.expiresAt || null,
       };
     });
 
@@ -104,7 +98,7 @@ export async function GET(request: NextRequest) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST: Send a new admin invitation
+// POST: Pre-authorize a new Google Admin Email
 // ─────────────────────────────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
   const actor = await getAdminFromRequest(request);
@@ -114,7 +108,7 @@ export async function POST(request: NextRequest) {
 
   if (!hasPermission(actor.role, "invite_admins")) {
     return NextResponse.json(
-      { error: "Only Super Admins can invite new administrators." },
+      { error: "Only Super Admins can pre-authorize new administrators." },
       { status: 403 }
     );
   }
@@ -170,7 +164,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Database unavailable." }, { status: 503 });
     }
 
-    // Check for existing active admin
+    // Check for existing admin
     const existingAdmin = await db
       .collection("admins")
       .where("emailNormalized", "==", normalizedEmail)
@@ -178,102 +172,63 @@ export async function POST(request: NextRequest) {
       .get();
 
     if (!existingAdmin.empty) {
+      const existingDoc = existingAdmin.docs[0].data();
       return NextResponse.json(
-        { error: "An admin with this email address already exists." },
+        { error: `An admin with email ${normalizedEmail} already exists (status: ${existingDoc.status}).` },
         { status: 409 }
       );
     }
-
-    // Check for existing pending invitation
-    const existingInvitation = await db
-      .collection("adminInvitations")
-      .where("emailNormalized", "==", normalizedEmail)
-      .where("status", "==", "pending")
-      .limit(1)
-      .get();
-
-    if (!existingInvitation.empty) {
-      return NextResponse.json(
-        {
-          error: "A pending invitation already exists for this email. Use 'Resend Invitation' to send a new link.",
-        },
-        { status: 409 }
-      );
-    }
-
-    // Generate cryptographically secure invitation token
-    const rawToken = crypto.randomBytes(48).toString("hex");
-    // Store only the hash
-    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
 
     const now = new Date().toISOString();
-    const expiresAt = new Date(Date.now() + INVITATION_TTL_MS).toISOString();
 
-    // Create pending invitation — status is "pending", NOT "active"
-    const invitationRef = await db.collection("adminInvitations").add({
+    // Create pre-authorized pending admin record in Firestore `admins` collection
+    const adminRef = await db.collection("admins").add({
       emailNormalized: normalizedEmail,
       email: normalizedEmail,
       displayName: cleanName,
       role: normalizedRole,
       status: "pending",
-      tokenHash,
-      expiresAt,
       invitedBy: actor.displayName,
       invitedByAdminId: actor.id,
       createdAt: now,
-      acceptedAt: null,
+      updatedAt: now,
     });
 
-    // Build the accept invitation URL
-    const baseUrl =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : "http://localhost:3000";
-    const inviteUrl = `${baseUrl}/admin/invite/accept?token=${rawToken}&invitation=${invitationRef.id}`;
-
-    // Send invitation email via Nodemailer
-    let emailSent = false;
-    try {
-      const emailResult = await sendAdminInviteEmail({
-        recipientEmail: normalizedEmail,
-        fullName: cleanName,
-        role: ROLE_LABELS[normalizedRole as AdminRole],
-        invitedByName: actor.displayName,
-        inviteUrl,
-      });
-      emailSent = emailResult.success;
-      if (!emailResult.success) {
-        console.error("[INVITE POST] Email send failed:", emailResult.error);
-      }
-    } catch (mailErr) {
-      console.error("[INVITE POST] Nodemailer exception:", mailErr);
-    }
+    // Also write to adminInvitations collection for UI list backwards compatibility
+    await db.collection("adminInvitations").doc(adminRef.id).set({
+      emailNormalized: normalizedEmail,
+      email: normalizedEmail,
+      displayName: cleanName,
+      role: normalizedRole,
+      status: "pending",
+      invitedBy: actor.displayName,
+      invitedByAdminId: actor.id,
+      createdAt: now,
+    }).catch(() => {});
 
     // Audit log
     await logAdminActivity({
       actorAdminId: actor.id,
-      action: "ADMIN_INVITED",
+      action: "ADMIN_PRE_AUTHORIZED",
       metadata: {
         invitedEmail: normalizedEmail,
         invitedName: cleanName,
         role: normalizedRole,
-        invitationId: invitationRef.id,
+        adminId: adminRef.id,
       },
     }).catch(() => {});
 
     return NextResponse.json(
       {
         success: true,
-        message: `Invitation sent to ${normalizedEmail}.`,
-        emailSent,
-        invitationId: invitationRef.id,
+        message: `Google email ${normalizedEmail} pre-authorized as ${ROLE_LABELS[normalizedRole as AdminRole]}. When this user signs in at /admin/login using Google, their access will activate automatically.`,
+        adminId: adminRef.id,
       },
       { status: 201 }
     );
   } catch (err) {
     console.error("[INVITE POST] Error:", err);
-    return NextResponse.json({ error: "Failed to send invitation." }, { status: 500 });
+    return NextResponse.json({ error: "Failed to pre-authorize admin." }, { status: 500 });
   }
 }
 

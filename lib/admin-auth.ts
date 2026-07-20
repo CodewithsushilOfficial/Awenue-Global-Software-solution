@@ -1,16 +1,18 @@
 /**
- * lib/admin-auth.ts — Authoritative Server-Side Admin Authorization & Credentials
+ * lib/admin-auth.ts — Authoritative Server-Side Admin Authorization & Firebase Google Auth
  *
- * Permanent Super Admin Credentials:
- *   Email:    codewithsushil7236@gmail.com
- *   Password: Sushil@7236 (or process.env.ADMIN_PASSWORD)
+ * Permanent Super Admin Email:
+ *   codewithsushil7236@gmail.com
  *
- * Priority order:
- * 1. Firestore admins collection (production with DB)
- * 2. Permanent Super Admin fallback (production serverless / pre-bootstrap)
+ * Flow:
+ * 1. Client authenticates via Firebase Google Auth (`signInWithPopup`)
+ * 2. Client sends Firebase ID token to `/api/admin/auth/google`
+ * 3. `authorizeGoogleAdmin` verifies the ID token using `getAdminAuth().verifyIdToken`
+ * 4. Checks Firestore `admins` collection for matching UID or pre-authorized Email
+ * 5. Returns authorized AdminRecord or denies access for unauthorized accounts
  */
 
-import { getAdminDb } from "@/lib/firebase-admin";
+import { getAdminDb, getAdminAuth } from "@/lib/firebase-admin";
 import { getSessionFromRequest } from "@/lib/session";
 import {
   hasPermission,
@@ -19,7 +21,6 @@ import {
   type Permission,
   type AdminStatus,
 } from "@/lib/rbac";
-import crypto from "crypto";
 
 export interface AdminRecord {
   id: string;
@@ -36,27 +37,18 @@ export interface AdminRecord {
   lastLoginAt?: string;
   createdAt: string;
   updatedAt?: string;
-  passwordHash?: string;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Permanent Super Admin Configuration
-// ─────────────────────────────────────────────────────────────
+// Permanent Super Admin Email
 const PERMANENT_ADMIN_EMAIL = (
   process.env.ADMIN_EMAIL ||
   process.env.NEXT_PUBLIC_ADMIN_EMAIL ||
   "codewithsushil7236@gmail.com"
 ).trim().toLowerCase();
 
-const PERMANENT_ADMIN_PASSWORD = (
-  process.env.ADMIN_PASSWORD ||
-  "Sushil@7236"
-).trim();
-
 function getEnvAdmin(normalizedEmail: string): AdminRecord | null {
   if (!normalizedEmail) return null;
 
-  // Match default permanent email OR configured ADMIN_EMAIL
   if (
     normalizedEmail === PERMANENT_ADMIN_EMAIL ||
     normalizedEmail === "codewithsushil7236@gmail.com"
@@ -79,124 +71,225 @@ function getEnvAdmin(normalizedEmail: string): AdminRecord | null {
 }
 
 /**
- * Timing-safe string equality check to prevent timing side-channel attacks
+ * Authorize an admin using a Firebase Google Auth ID Token.
+ *
+ * 1. Verifies the ID token via Firebase Admin Auth (`getAdminAuth().verifyIdToken`)
+ * 2. Extracts trusted `uid` and `email`
+ * 3. Checks Firestore `admins` collection:
+ *    - Query by UID (`uid == googleUid`)
+ *    - If not found by UID, query by normalized email (`emailNormalized == normalizedEmail`)
+ *    - If found by email with status "pending" or "active":
+ *        Link UID, set status to "active", update activatedAt/lastLoginAt, return admin record.
+ * 4. If not found in Firestore, check if normalized email matches Super Admin email (`codewithsushil7236@gmail.com`).
+ *    - If matched, upsert super admin record in Firestore and return active Super Admin record.
+ * 5. If unauthorized, returns `{ authorized: false, error: "..." }`.
  */
-export function timingSafeCompare(a: string, b: string): boolean {
+export async function authorizeGoogleAdmin(idToken: string): Promise<
+  | { authorized: true; admin: AdminRecord }
+  | { authorized: false; error: string }
+> {
   try {
-    const bufA = Buffer.from(a);
-    const bufB = Buffer.from(b);
-    if (bufA.length !== bufB.length) return false;
-    return crypto.timingSafeEqual(bufA, bufB);
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Verify an admin's password.
- * Checks Firestore admin record passwordHash OR permanent Super Admin password (`Sushil@7236`).
- */
-export async function verifyAdminPassword(
-  email: string,
-  inputPassword?: string
-): Promise<{ valid: boolean; admin: AdminRecord | null }> {
-  if (!inputPassword || typeof inputPassword !== "string") {
-    return { valid: false, admin: null };
-  }
-
-  const normalizedEmail = email.trim().toLowerCase();
-  const cleanPassword = inputPassword.trim();
-
-  // 1. Get active admin record
-  const admin = await getActiveAdminByEmail(normalizedEmail);
-  if (!admin) {
-    return { valid: false, admin: null };
-  }
-
-  // 2. Check permanent Super Admin password
-  if (
-    normalizedEmail === PERMANENT_ADMIN_EMAIL ||
-    normalizedEmail === "codewithsushil7236@gmail.com"
-  ) {
-    const isPermanentMatch = timingSafeCompare(cleanPassword, PERMANENT_ADMIN_PASSWORD) ||
-      cleanPassword === "Sushil@7236";
-
-    if (isPermanentMatch) {
-      return { valid: true, admin };
+    const auth = getAdminAuth();
+    if (!auth) {
+      return {
+        authorized: false,
+        error: "Firebase Admin Authentication service is unavailable.",
+      };
     }
-  }
 
-  // 3. Check Firestore password (if stored)
-  if (admin.passwordHash) {
-    const hash = crypto.createHash("sha256").update(cleanPassword).digest("hex");
-    if (timingSafeCompare(hash, admin.passwordHash)) {
-      return { valid: true, admin };
+    const decodedToken = await auth.verifyIdToken(idToken);
+    const googleUid = decodedToken.uid;
+    const googleEmail = decodedToken.email;
+
+    if (!googleEmail) {
+      return {
+        authorized: false,
+        error: "Google account does not contain a verified email address.",
+      };
     }
-  }
 
-  // Fallback check against permanent password for any active super_admin
-  if (admin.role === "super_admin" && (cleanPassword === PERMANENT_ADMIN_PASSWORD || cleanPassword === "Sushil@7236")) {
-    return { valid: true, admin };
-  }
+    const normalizedEmail = googleEmail.trim().toLowerCase();
+    const db = getAdminDb();
+    const now = new Date().toISOString();
 
-  return { valid: false, admin: null };
+    if (db) {
+      // 1. Check by UID first
+      const uidQuery = await db
+        .collection("admins")
+        .where("uid", "==", googleUid)
+        .limit(1)
+        .get()
+        .catch(() => null);
+
+      if (uidQuery && !uidQuery.empty) {
+        const doc = uidQuery.docs[0];
+        const data = doc.data();
+
+        if (data.status === "suspended" || data.status === "revoked") {
+          return {
+            authorized: false,
+            error: `Your admin account has been ${data.status}. Access denied.`,
+          };
+        }
+
+        if (data.status === "active") {
+          const role = isValidRole(data.role) ? data.role : "admin";
+          await doc.ref.update({ lastLoginAt: now, updatedAt: now }).catch(() => {});
+          return {
+            authorized: true,
+            admin: {
+              id: doc.id,
+              uid: googleUid,
+              email: data.email || normalizedEmail,
+              emailNormalized: normalizedEmail,
+              displayName: data.displayName || decodedToken.name || "Administrator",
+              role,
+              status: "active",
+              createdAt: data.createdAt || now,
+              lastLoginAt: now,
+            },
+          };
+        }
+      }
+
+      // 2. If not found by UID, check by normalized email (Pre-authorized / Pending invite)
+      const emailQuery = await db
+        .collection("admins")
+        .where("emailNormalized", "==", normalizedEmail)
+        .limit(1)
+        .get()
+        .catch(() => null);
+
+      if (emailQuery && !emailQuery.empty) {
+        const doc = emailQuery.docs[0];
+        const data = doc.data();
+
+        if (data.status === "suspended" || data.status === "revoked") {
+          return {
+            authorized: false,
+            error: `Your admin account has been ${data.status}. Access denied.`,
+          };
+        }
+
+        const role = isValidRole(data.role) ? data.role : "admin";
+
+        // Link UID & activate admin
+        await doc.ref
+          .update({
+            uid: googleUid,
+            status: "active",
+            activatedAt: data.activatedAt || now,
+            lastLoginAt: now,
+            updatedAt: now,
+            displayName: data.displayName || decodedToken.name || "Administrator",
+          })
+          .catch(() => {});
+
+        return {
+          authorized: true,
+          admin: {
+            id: doc.id,
+            uid: googleUid,
+            email: normalizedEmail,
+            emailNormalized: normalizedEmail,
+            displayName: data.displayName || decodedToken.name || "Administrator",
+            role,
+            status: "active",
+            createdAt: data.createdAt || now,
+            activatedAt: data.activatedAt || now,
+            lastLoginAt: now,
+          },
+        };
+      }
+    }
+
+    // 3. Fallback check for Permanent Super Admin (`codewithsushil7236@gmail.com`)
+    if (
+      normalizedEmail === PERMANENT_ADMIN_EMAIL ||
+      normalizedEmail === "codewithsushil7236@gmail.com"
+    ) {
+      if (db) {
+        const superAdminRef = db.collection("admins").doc("super_admin_permanent");
+        await superAdminRef
+          .set(
+            {
+              uid: googleUid,
+              email: normalizedEmail,
+              emailNormalized: normalizedEmail,
+              displayName: decodedToken.name || "Super Administrator",
+              role: "super_admin",
+              status: "active",
+              lastLoginAt: now,
+              updatedAt: now,
+              createdAt: now,
+            },
+            { merge: true }
+          )
+          .catch(() => {});
+      }
+
+      return {
+        authorized: true,
+        admin: {
+          id: "super_admin_permanent",
+          uid: googleUid,
+          email: normalizedEmail,
+          emailNormalized: normalizedEmail,
+          displayName: decodedToken.name || "Super Administrator",
+          role: "super_admin",
+          status: "active",
+          createdAt: now,
+          lastLoginAt: now,
+        },
+      };
+    }
+
+    // 4. Unauthorized Google Account
+    return {
+      authorized: false,
+      error: "This Google account is not authorized to access the AWENUE Admin Dashboard.",
+    };
+  } catch (err: unknown) {
+    console.error("[ADMIN AUTH] ID token verification failed:", err);
+    return {
+      authorized: false,
+      error: "Authentication failed. Token is invalid or expired.",
+    };
+  }
 }
 
 /**
  * Look up an active admin by normalized email.
- * Falls back to ENV/Permanent admin if Firestore is unavailable or slow.
  */
 export async function getActiveAdminByEmail(
   email: string
 ): Promise<AdminRecord | null> {
   const normalizedEmail = email.trim().toLowerCase();
 
-  // ── 1. Try Firestore first (with 2.5s safety timeout) ──────
   try {
     const db = getAdminDb();
     if (db) {
-      const dbQueryPromise = db
+      const snap = await db
         .collection("admins")
         .where("emailNormalized", "==", normalizedEmail)
         .limit(1)
         .get();
-      dbQueryPromise.catch(() => {});
-
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Firestore lookup timeout")), 2500)
-      );
-
-      const snap = (await Promise.race([
-        dbQueryPromise,
-        timeoutPromise,
-      ])) as FirebaseFirestore.QuerySnapshot;
 
       if (!snap.empty) {
         const doc = snap.docs[0];
         const data = doc.data();
 
-        if (data.status !== "active") {
-          console.warn(
-            `[ADMIN AUTH] Admin ${normalizedEmail} found but status=${data.status}`
-          );
-          return null;
-        }
+        if (data.status !== "active") return null;
 
         const role = isValidRole(data.role) ? data.role : null;
-        if (!role) {
-          console.warn(
-            `[ADMIN AUTH] Admin ${normalizedEmail} has invalid role: ${data.role}`
-          );
-          return null;
-        }
+        if (!role) return null;
 
         return {
           id: doc.id,
           uid: data.uid,
           email: data.email || normalizedEmail,
           emailNormalized: normalizedEmail,
-          displayName:
-            data.displayName || data.fullName || "Administrator",
+          displayName: data.displayName || data.fullName || "Administrator",
           role,
           status: data.status,
           invitedBy: data.invitedBy,
@@ -206,7 +299,6 @@ export async function getActiveAdminByEmail(
           lastLoginAt: data.lastLoginAt,
           createdAt: data.createdAt || new Date().toISOString(),
           updatedAt: data.updatedAt,
-          passwordHash: data.passwordHash,
         };
       }
     }
@@ -214,13 +306,7 @@ export async function getActiveAdminByEmail(
     console.warn("[ADMIN AUTH] Firestore lookup notice:", err);
   }
 
-  // ── 2. Permanent / ENV fallback ─────────────────────────────
-  const envAdmin = getEnvAdmin(normalizedEmail);
-  if (envAdmin) {
-    return envAdmin;
-  }
-
-  return null;
+  return getEnvAdmin(normalizedEmail);
 }
 
 /**
@@ -229,7 +315,7 @@ export async function getActiveAdminByEmail(
 export async function getAdminById(
   adminId: string
 ): Promise<AdminRecord | null> {
-  if (adminId === "env_bootstrap_admin") {
+  if (adminId === "env_bootstrap_admin" || adminId === "super_admin_permanent") {
     return getEnvAdmin(PERMANENT_ADMIN_EMAIL);
   }
 
@@ -237,18 +323,7 @@ export async function getAdminById(
     const db = getAdminDb();
     if (!db) return getEnvAdmin(PERMANENT_ADMIN_EMAIL);
 
-    const dbQueryPromise = db.collection("admins").doc(adminId).get();
-    dbQueryPromise.catch(() => {});
-
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Firestore lookup timeout")), 2500)
-    );
-
-    const doc = (await Promise.race([
-      dbQueryPromise,
-      timeoutPromise,
-    ])) as FirebaseFirestore.DocumentSnapshot;
-
+    const doc = await db.collection("admins").doc(adminId).get();
     if (!doc.exists) return null;
 
     const data = doc.data()!;
@@ -270,7 +345,6 @@ export async function getAdminById(
       lastLoginAt: data.lastLoginAt,
       createdAt: data.createdAt || new Date().toISOString(),
       updatedAt: data.updatedAt,
-      passwordHash: data.passwordHash,
     };
   } catch (err) {
     console.warn("[ADMIN AUTH] getAdminById notice:", err);
@@ -308,7 +382,7 @@ export async function requirePermission(
   return admin;
 }
 
-/** Update lastLoginAt — no-op for ENV admin */
+/** Update lastLoginAt */
 export async function updateLastLogin(adminId: string): Promise<void> {
   if (adminId === "env_bootstrap_admin") return;
   try {
