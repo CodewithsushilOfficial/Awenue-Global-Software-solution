@@ -25,9 +25,9 @@ const heroSlides = [
   },
   {
     src: "/hero-mobile-green.png",
-    alt: "Premium mobile app development with AWENUE green branded UI",
+    alt: "Android app development with AWENUE — Kotlin and modern mobile UI",
     kenBurns: "ken-pan-left",
-    label: "Mobile Apps",
+    label: "Android Development",
   },
   {
     src: "/hero-growth-green.png",
