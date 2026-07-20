@@ -220,7 +220,7 @@ export default function AdminConsultationsPage() {
             placeholder="Search by name, email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-surface-base border border-white/10 pl-9 pr-4 py-2.5 rounded-xl text-xs text-white outline-none focus:border-accent"
+            className="w-full bg-surface-base border border-white/10 focus:border-accent-tint pl-9 pr-4 py-2.5 rounded-xl text-xs text-white outline-none transition-colors"
           />
           <Search size={14} className="absolute left-3 top-3 text-text-muted" />
         </div>
@@ -231,7 +231,7 @@ export default function AdminConsultationsPage() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-surface-base border border-white/10 px-3 py-2 rounded-xl text-xs text-white outline-none cursor-pointer focus:border-accent"
+              className="bg-surface-base border border-white/10 focus:border-accent-tint px-3 py-2 rounded-xl text-xs text-white outline-none cursor-pointer transition-colors"
             >
               <option value="all">All Statuses</option>
               <option value="new">New</option>
@@ -244,7 +244,7 @@ export default function AdminConsultationsPage() {
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="bg-surface-base border border-white/10 px-3 py-2 rounded-xl text-xs text-white outline-none cursor-pointer focus:border-accent"
+            className="bg-surface-base border border-white/10 focus:border-accent-tint px-3 py-2 rounded-xl text-xs text-white outline-none cursor-pointer transition-colors"
           >
             <option value="all">All Categories</option>
             <option value="I Need a Consultation">I Need a Consultation</option>
@@ -408,7 +408,7 @@ export default function AdminConsultationsPage() {
                 <select
                   value={statusInput}
                   onChange={(e) => setStatusInput(e.target.value as ConsultationRequest["status"])}
-                  className="w-full bg-surface-base border border-white/10 px-3 py-2.5 rounded-xl text-xs text-white outline-none focus:border-accent"
+                  className="w-full bg-surface-base border border-white/10 focus:border-accent-tint px-3 py-2.5 rounded-xl text-xs text-white outline-none transition-colors"
                 >
                   <option value="new">New</option>
                   <option value="contacted">Contacted</option>
@@ -426,7 +426,7 @@ export default function AdminConsultationsPage() {
                   value={notesInput}
                   onChange={(e) => setNotesInput(e.target.value)}
                   placeholder="Notes about client discussion, recommendation..."
-                  className="w-full bg-surface-base border border-white/10 p-3 rounded-xl text-xs text-white outline-none focus:border-accent resize-none"
+                  className="w-full bg-surface-base border border-white/10 focus:border-accent-tint p-3 rounded-xl text-xs text-white outline-none transition-colors resize-none"
                 />
               </div>
 

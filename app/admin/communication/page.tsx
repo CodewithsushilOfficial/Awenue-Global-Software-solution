@@ -9,8 +9,6 @@ import {
   Filter,
   CheckCircle2,
   XCircle,
-  Clock,
-  User,
   Loader2,
   RefreshCw,
 } from "lucide-react";
@@ -108,7 +106,7 @@ export default function AdminCommunicationPage() {
             placeholder="Search email, name, subject..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-surface-base border border-white/10 pl-9 pr-4 py-2.5 rounded-xl text-xs text-white outline-none focus:border-accent"
+            className="w-full bg-surface-base border border-white/10 focus:border-accent-tint pl-9 pr-4 py-2.5 rounded-xl text-xs text-white outline-none transition-colors"
           />
           <Search size={14} className="absolute left-3 top-3 text-text-muted" />
         </div>
@@ -119,7 +117,7 @@ export default function AdminCommunicationPage() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-surface-base border border-white/10 px-3 py-2 rounded-xl text-xs text-white outline-none cursor-pointer focus:border-accent"
+              className="bg-surface-base border border-white/10 focus:border-accent-tint px-3 py-2 rounded-xl text-xs text-white outline-none cursor-pointer transition-colors"
             >
               <option value="all">All Delivery Statuses</option>
               <option value="sent">Sent</option>
@@ -130,7 +128,7 @@ export default function AdminCommunicationPage() {
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="bg-surface-base border border-white/10 px-3 py-2 rounded-xl text-xs text-white outline-none cursor-pointer focus:border-accent"
+            className="bg-surface-base border border-white/10 focus:border-accent-tint px-3 py-2 rounded-xl text-xs text-white outline-none cursor-pointer transition-colors"
           >
             <option value="all">All Lead Sources</option>
             <option value="projectInquiry">Project Inquiries</option>
