@@ -209,8 +209,8 @@ export async function POST(request: NextRequest) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[OTP VERIFY] Unhandled error:", msg);
     return NextResponse.json(
-      { error: "An error occurred during verification." },
-      { status: 500 }
+      { error: `Verification error: ${msg}` },
+      { status: 400 }
     );
   }
 }

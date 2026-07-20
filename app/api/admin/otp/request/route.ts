@@ -14,7 +14,7 @@ import {
   getActiveOtpChallenge,
   invalidatePreviousChallenges,
 } from "@/lib/otp-store";
-import { getActiveAdminByEmail, verifyAdminPassword } from "@/lib/admin-auth";
+import { verifyAdminPassword } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
       email = typeof body.email === "string" ? body.email : "";
       password = typeof body.password === "string" ? body.password : "";
     } catch {
-      return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+      return NextResponse.json({ error: "Invalid request format." }, { status: 400 });
     }
 
     if (!email || !email.includes("@")) {
@@ -117,16 +117,10 @@ export async function POST(request: NextRequest) {
     try {
       const emailResult = await sendAdminOtpEmail(normalizedEmail, rawOtp);
       if (!emailResult.success) {
-        console.error("[OTP REQUEST] Email delivery failed:", emailResult.error);
-        if (process.env.NODE_ENV !== "production") {
-          messageSent = `Dev mode OTP: ${rawOtp} (Email notice: ${emailResult.error || "SMTP issue"})`;
-        }
+        console.error("[OTP REQUEST] Email delivery notice:", emailResult.error);
       }
     } catch (mailErr) {
-      console.error("[OTP REQUEST] Nodemailer exception:", mailErr);
-      if (process.env.NODE_ENV !== "production") {
-        messageSent = `Dev mode OTP: ${rawOtp} (Email delivery failed)`;
-      }
+      console.error("[OTP REQUEST] Nodemailer notice:", mailErr);
     }
 
     return NextResponse.json(
@@ -141,8 +135,8 @@ export async function POST(request: NextRequest) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[OTP REQUEST] Exception:", msg);
     return NextResponse.json(
-      { error: "An error occurred while generating the verification code." },
-      { status: 500 }
+      { error: `Login request failed: ${msg}` },
+      { status: 400 }
     );
   }
 }
