@@ -43,9 +43,9 @@ function createTransporter() {
         user: user.trim(),
         pass,
       },
-      connectionTimeout: 8000,
-      greetingTimeout: 8000,
-      socketTimeout: 8000,
+      connectionTimeout: 3500,
+      greetingTimeout: 3500,
+      socketTimeout: 3500,
     });
   }
 
@@ -60,9 +60,9 @@ function createTransporter() {
     tls: {
       rejectUnauthorized: false,
     },
-    connectionTimeout: 8000,
-    greetingTimeout: 8000,
-    socketTimeout: 8000,
+    connectionTimeout: 3500,
+    greetingTimeout: 3500,
+    socketTimeout: 3500,
   });
 }
 
@@ -109,7 +109,7 @@ export async function sendAdminOtpEmail(email: string, otpCode: string): Promise
 
     const text = `Your AWENUE Admin verification code is:\n\n${otpCode}\n\nThis code expires in 5 minutes.\n\nIf you did not request this login, you can safely ignore this email.\n\n— AWENUE\nAvenue Global Software Solutions`;
 
-    const info = await transporter.sendMail({
+    const sendPromise = transporter.sendMail({
       from: fromEmail,
       to: email,
       subject,
@@ -117,7 +117,13 @@ export async function sendAdminOtpEmail(email: string, otpCode: string): Promise
       html,
     });
 
-    console.log(`[Nodemailer] Admin OTP email sent successfully to ${email}. MessageID:`, info.messageId);
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Email delivery socket timeout")), 3500)
+    );
+
+    const info = (await Promise.race([sendPromise, timeoutPromise])) as any;
+
+    console.log(`[Nodemailer] Admin OTP email sent successfully to ${email}. MessageID:`, info?.messageId);
 
     return { success: true };
   } catch (err: unknown) {
