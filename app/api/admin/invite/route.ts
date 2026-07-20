@@ -69,7 +69,13 @@ export async function GET() {
 // POST: Invite a new Admin
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    let body: any = {};
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON request payload." }, { status: 400 });
+    }
+
     const { email, fullName, role, invitedBy } = body;
 
     if (!email || typeof email !== "string" || !email.includes("@")) {
@@ -85,37 +91,46 @@ export async function POST(request: NextRequest) {
     const nowISO = new Date().toISOString();
     const adminDocId = "admin_" + crypto.createHash("md5").update(normalizedEmail).digest("hex").slice(0, 12);
 
-    const db = getAdminDb();
-    if (db) {
-      // Check if already in Firestore
-      const existingSnap = await db
-        .collection("admins")
-        .where("email", "==", normalizedEmail)
-        .limit(1)
-        .get();
+    let isAlreadyRegistered = false;
 
-      if (!existingSnap.empty) {
-        return NextResponse.json(
-          { error: `An administrator with email ${normalizedEmail} is already registered.` },
-          { status: 400 }
-        );
+    // Save to Firestore 'admins' collection safely
+    try {
+      const db = getAdminDb();
+      if (db) {
+        const existingSnap = await db
+          .collection("admins")
+          .where("email", "==", normalizedEmail)
+          .limit(1)
+          .get();
+
+        if (!existingSnap.empty) {
+          isAlreadyRegistered = true;
+        } else {
+          await db.collection("admins").doc(adminDocId).set({
+            email: normalizedEmail,
+            fullName: cleanFullName,
+            role: cleanRole,
+            status: "active",
+            createdAt: nowISO,
+            invitedBy: invitedBy || "Super Admin",
+          });
+        }
       }
+    } catch (dbErr) {
+      console.warn("[ADMIN INVITE] Firestore admin save notice:", dbErr);
+    }
 
-      // Save to Firestore 'admins' collection
-      await db.collection("admins").doc(adminDocId).set({
-        email: normalizedEmail,
-        fullName: cleanFullName,
-        role: cleanRole,
-        status: "active",
-        createdAt: nowISO,
-        invitedBy: invitedBy || "Super Admin",
-      });
+    if (isAlreadyRegistered) {
+      return NextResponse.json(
+        { error: `An administrator with email ${normalizedEmail} is already registered.` },
+        { status: 400 }
+      );
     }
 
     // Set Firebase Auth custom claims if available
-    const auth = getAdminAuth();
-    if (auth) {
-      try {
+    try {
+      const auth = getAdminAuth();
+      if (auth) {
         let userUid = adminDocId;
         try {
           const userRecord = await auth.getUserByEmail(normalizedEmail);
@@ -129,22 +144,28 @@ export async function POST(request: NextRequest) {
           userUid = newUser.uid;
         }
         await auth.setCustomUserClaims(userUid, { role: "admin", admin: true });
-      } catch (authErr) {
-        console.warn("[ADMIN INVITE] Firebase Admin Auth setup notice:", authErr);
       }
+    } catch (authErr) {
+      console.warn("[ADMIN INVITE] Firebase Admin Auth setup notice:", authErr);
     }
 
     // Send Admin Invitation Email via Nodemailer
-    const emailResult = await sendAdminInviteEmail({
-      recipientEmail: normalizedEmail,
-      fullName: cleanFullName,
-      role: cleanRole,
-      invitedByName: invitedBy || "Super Administrator",
-    });
+    let emailResult = { success: true };
+    try {
+      emailResult = await sendAdminInviteEmail({
+        recipientEmail: normalizedEmail,
+        fullName: cleanFullName,
+        role: cleanRole,
+        invitedByName: invitedBy || "Super Administrator",
+      });
+    } catch (emailErr) {
+      console.warn("[ADMIN INVITE] Nodemailer error notice:", emailErr);
+    }
 
     // Audit log entry
-    if (db) {
-      try {
+    try {
+      const db = getAdminDb();
+      if (db) {
         await db.collection("adminAuditLogs").add({
           type: "ADMIN_INVITED",
           invitedEmail: normalizedEmail,
@@ -153,9 +174,9 @@ export async function POST(request: NextRequest) {
           invitedBy: invitedBy || "Super Admin",
           createdAt: nowISO,
         });
-      } catch (auditErr) {
-        console.warn("[ADMIN INVITE] Audit log failed:", auditErr);
       }
+    } catch (auditErr) {
+      console.warn("[ADMIN INVITE] Audit log failed:", auditErr);
     }
 
     return NextResponse.json(
@@ -169,7 +190,7 @@ export async function POST(request: NextRequest) {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to invite admin.";
     console.error("API /api/admin/invite error:", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }
 
