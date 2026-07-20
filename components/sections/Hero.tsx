@@ -2,9 +2,12 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import Image from "next/image";
+
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { useModal } from "@/components/providers/ModalProvider";
 import { ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 // ─── HERO SLIDE DATA ──────────────────────────────────────────────────────────
 const heroSlides = [
@@ -60,6 +63,52 @@ export default function Hero() {
   const [current, setCurrent] = useState(0);
   const [serviceIdx, setServiceIdx] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [cmsContent, setCmsContent] = useState({
+    heroEyebrow: "YOUR DIGITAL GROWTH PARTNER",
+    heroHeading: "We Build Digital Solutions That",
+    heroHighlight: "Turn Ideas Into Growth.",
+    heroDescription:
+      "From websites and mobile apps to SaaS products and AI automation — we build technology that helps your business move forward.",
+    heroPrimaryCta: "Start Your Project",
+    heroSecondaryCta: "Get Free Consultation",
+  });
+
+  useEffect(() => {
+    async function loadCms() {
+      try {
+        const snap = await getDoc(doc(db, "websiteContent", "homepage"));
+        if (snap.exists()) {
+          const data = snap.data();
+          setCmsContent((prev) => ({
+            heroEyebrow: data.heroEyebrow || prev.heroEyebrow,
+            heroHeading: data.heroHeading || prev.heroHeading,
+            heroHighlight: data.heroHighlight || prev.heroHighlight,
+            heroDescription: data.heroDescription || prev.heroDescription,
+            heroPrimaryCta: data.heroPrimaryCta || prev.heroPrimaryCta,
+            heroSecondaryCta: data.heroSecondaryCta || prev.heroSecondaryCta,
+          }));
+        } else {
+          const altSnap = await getDoc(doc(db, "siteContent", "homepage"));
+          if (altSnap.exists()) {
+            const data = altSnap.data();
+            setCmsContent((prev) => ({
+              heroEyebrow: data.heroEyebrow || prev.heroEyebrow,
+              heroHeading: data.heroHeading || prev.heroHeading,
+              heroHighlight: data.heroHighlight || prev.heroHighlight,
+              heroDescription: data.heroDescription || prev.heroDescription,
+              heroPrimaryCta: data.heroPrimaryCta || prev.heroPrimaryCta,
+              heroSecondaryCta: data.heroSecondaryCta || prev.heroSecondaryCta,
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn("Hero CMS load notice:", err);
+      }
+    }
+    loadCms();
+  }, []);
+
 
   // Advance slide
   const advance = useCallback(() => {
@@ -135,6 +184,20 @@ export default function Hero() {
         </AnimatePresence>
       </div>
 
+      {/* Preload hero images for instant sub-10ms slide transitions */}
+      <div className="hidden" aria-hidden="true">
+        {heroSlides.slice(1).map((slide, idx) => (
+          <Image
+            key={idx}
+            src={slide.src}
+            alt=""
+            width={1}
+            height={1}
+            priority
+          />
+        ))}
+      </div>
+
       {/* ─── OVERLAY SYSTEM ──────────────────────────────────────────────── */}
       <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
         {/* Global dark tint — reduced so images breathe */}
@@ -174,14 +237,14 @@ export default function Hero() {
           <motion.div {...fadeUp(0)}>
             <div className="inline-flex items-center gap-2 px-4 py-1.5 border border-accent/30 bg-accent/10 backdrop-blur-sm text-accent text-eyebrow rounded-full mb-7 shadow-[0_0_24px_rgba(9,184,80,0.12)]">
               <Sparkles size={13} className="text-accent shrink-0" aria-hidden="true" />
-              <span>YOUR DIGITAL GROWTH PARTNER</span>
+              <span>{cmsContent.heroEyebrow}</span>
             </div>
           </motion.div>
 
           {/* Main Heading */}
           <motion.h1 {...fadeUp(0.1)} className="text-hero-title text-text-secondary mb-6">
-            We Build Digital Solutions That{" "}
-            <span className="text-accent">Turn Ideas Into Growth.</span>
+            {cmsContent.heroHeading}{" "}
+            <span className="text-accent">{cmsContent.heroHighlight}</span>
           </motion.h1>
 
           {/* Description */}
@@ -189,8 +252,7 @@ export default function Hero() {
             {...fadeUp(0.2)}
             className="text-body-lg text-text-muted mb-8 max-w-[560px] leading-relaxed"
           >
-            From websites and mobile apps to SaaS products and AI automation — we build
-            technology that helps your business move forward.
+            {cmsContent.heroDescription}
           </motion.p>
 
           {/* Rotating "We Build → …" */}
@@ -231,13 +293,13 @@ export default function Hero() {
                 flex items-center justify-center gap-2"
               aria-label="Start your project with AWENUE"
             >
-              <span>Start Your Project</span>
+              <span>{cmsContent.heroPrimaryCta}</span>
               <ArrowRight size={17} className="group-hover:translate-x-1 transition-transform duration-300" aria-hidden="true" />
             </button>
 
             <button
               onClick={() => openModal("consultation")}
-              className="border border-white/15 bg-white/5 backdrop-blur-sm
+              className="group border border-white/15 bg-white/5 backdrop-blur-sm
                 hover:border-accent/40 hover:bg-accent/5 text-text-secondary text-btn
                 px-8 py-4 rounded-xl transition-all duration-200
                 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-tint

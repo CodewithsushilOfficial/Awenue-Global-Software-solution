@@ -38,6 +38,11 @@ export default function AdminSettingsPage() {
         const snap = await getDoc(docRef);
         if (snap.exists()) {
           setSettings({ ...DEFAULT_SETTINGS, ...snap.data() });
+        } else {
+          const altSnap = await getDoc(doc(db, "settings", "general"));
+          if (altSnap.exists()) {
+            setSettings({ ...DEFAULT_SETTINGS, ...altSnap.data() });
+          }
         }
       } catch (err) {
         console.warn("Using default admin settings:", err);
@@ -52,15 +57,42 @@ export default function AdminSettingsPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const docRef = doc(db, "adminSettings", "general");
-      await setDoc(docRef, {
-        ...settings,
-        updatedAt: new Date().toISOString(),
+      // 1. Post to server-side Firebase Admin API route first (bypasses rules)
+      const res = await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set",
+          collectionName: "adminSettings",
+          docId: "general",
+          data: settings,
+        }),
       });
+
+      if (!res.ok) {
+        const docRef = doc(db, "adminSettings", "general");
+        await setDoc(docRef, {
+          ...settings,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
       setFeedback("Business settings updated successfully!");
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       console.error("Error saving settings:", err);
+      try {
+        const docRef = doc(db, "adminSettings", "general");
+        await setDoc(docRef, {
+          ...settings,
+          updatedAt: new Date().toISOString(),
+        });
+        setFeedback("Business settings saved!");
+        setTimeout(() => setFeedback(null), 3000);
+      } catch (fErr) {
+        console.error("Fallback save settings failed:", fErr);
+        alert("Failed to save settings. Please try again.");
+      }
     } finally {
       setSaving(false);
     }

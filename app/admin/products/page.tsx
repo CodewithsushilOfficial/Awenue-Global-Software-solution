@@ -21,6 +21,8 @@ import {
   X,
   Loader2,
   ExternalLink,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 
 interface ProductItem {
@@ -54,6 +56,59 @@ export default function AdminProductsPage() {
       snap.forEach((docSnap) => {
         list.push({ ...docSnap.data(), id: docSnap.id } as ProductItem);
       });
+
+      if (list.length === 0) {
+        // Auto-seed default products to Firestore so admin can manage them immediately
+        const initialProducts: Omit<ProductItem, "id">[] = [
+          {
+            name: "Awenue CRM",
+            slug: "awenue-crm",
+            shortDescription: "Manage leads, customers, sales, and business relationships — all in one place.",
+            detailedDescription: "Comprehensive CRM designed to organize leads, automate follow-ups, and track business growth effortlessly.",
+            features: ["Lead Management", "Sales Pipeline", "Customer Management"],
+            productStatus: "live",
+            externalUrl: "https://crm.awenue.io",
+            ctaLabel: "Visit CRM Website",
+            displayOrder: 1,
+            published: true,
+          },
+          {
+            name: "Awenue College ERP",
+            slug: "awenue-college-erp",
+            shortDescription: "A smarter platform to manage students, faculty, academics, fees, and campus operations.",
+            detailedDescription: "Complete institutional management software for modern colleges and universities.",
+            features: ["Student Management", "Attendance", "Fee Management"],
+            productStatus: "live",
+            externalUrl: "https://erp.awenue.io",
+            ctaLabel: "Visit ERP Website",
+            displayOrder: 2,
+            published: true,
+          },
+          {
+            name: "Awenue Hospital Management",
+            slug: "hospital-management",
+            shortDescription: "A connected digital solution designed to simplify hospital and healthcare operations.",
+            detailedDescription: "Next-generation healthcare administrative software for hospitals and medical clinics.",
+            features: ["Patient Management", "Appointments", "Hospital Operations"],
+            productStatus: "coming_soon",
+            externalUrl: "",
+            ctaLabel: "Coming Soon",
+            displayOrder: 3,
+            published: true,
+          },
+        ];
+
+        for (const item of initialProducts) {
+          const docId = `prod-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+          await fetch("/api/admin/cms", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "set", collectionName: "products", docId, data: item }),
+          });
+          list.push({ ...item, id: docId });
+        }
+      }
+
       setProducts(list);
     } catch (err) {
       console.error("Error fetching products:", err);
@@ -73,6 +128,7 @@ export default function AdminProductsPage() {
   }, [fetchProducts]);
 
   const openNewProduct = () => {
+    const minOrder = products.length > 0 ? Math.min(...products.map((p) => p.displayOrder || 1)) : 1;
     setEditingProduct({
       name: "",
       slug: "",
@@ -81,10 +137,45 @@ export default function AdminProductsPage() {
       productStatus: "live",
       externalUrl: "https://",
       ctaLabel: "Visit Product Website",
-      displayOrder: products.length + 1,
+      displayOrder: minOrder <= 1 ? minOrder - 1 : 1,
       published: true,
     });
     setFeaturesText("");
+  };
+
+  const moveProduct = async (index: number, direction: "up" | "down") => {
+    const targetIdx = direction === "up" ? index - 1 : index + 1;
+    if (targetIdx < 0 || targetIdx >= products.length) return;
+
+    const current = { ...products[index] };
+    const target = { ...products[targetIdx] };
+
+    const tempOrder = current.displayOrder;
+    current.displayOrder = target.displayOrder;
+    target.displayOrder = tempOrder;
+
+    const updated = [...products];
+    updated[index] = target;
+    updated[targetIdx] = current;
+    updated.sort((a, b) => a.displayOrder - b.displayOrder);
+    setProducts(updated);
+
+    try {
+      await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update", collectionName: "products", docId: current.id, data: { displayOrder: current.displayOrder } }),
+      });
+      await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update", collectionName: "products", docId: target.id, data: { displayOrder: target.displayOrder } }),
+      });
+      setFeedback("Display order updated.");
+      setTimeout(() => setFeedback(null), 2500);
+    } catch (err) {
+      console.error("Error updating display order:", err);
+    }
   };
 
   const openEditProduct = (product: ProductItem) => {
@@ -115,21 +206,46 @@ export default function AdminProductsPage() {
     };
 
     try {
-      if (editingProduct.id) {
-        await updateDoc(doc(db, "products", editingProduct.id), payload);
-        setFeedback("Product updated successfully.");
-      } else {
-        await addDoc(collection(db, "products"), {
-          ...payload,
-          createdAt: new Date().toISOString(),
-        });
-        setFeedback("New product created successfully.");
+      const isEdit = Boolean(editingProduct.id);
+      const action = isEdit ? "update" : "add";
+      const docId = editingProduct.id || `product-${Date.now()}`;
+
+      const res = await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          collectionName: "products",
+          docId,
+          data: payload,
+        }),
+      });
+
+      if (!res.ok) {
+        if (isEdit && editingProduct.id) {
+          await updateDoc(doc(db, "products", editingProduct.id), payload);
+        } else {
+          await addDoc(collection(db, "products"), { ...payload, createdAt: new Date().toISOString() });
+        }
       }
+
+      setFeedback(isEdit ? "Product updated successfully." : "New product created successfully.");
       setEditingProduct(null);
       fetchProducts();
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       console.error("Error saving product:", err);
+      try {
+        if (editingProduct.id) {
+          await updateDoc(doc(db, "products", editingProduct.id), payload);
+        } else {
+          await addDoc(collection(db, "products"), { ...payload, createdAt: new Date().toISOString() });
+        }
+        setEditingProduct(null);
+        fetchProducts();
+      } catch (fErr) {
+        console.error("Fallback product save failed:", fErr);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -137,8 +253,17 @@ export default function AdminProductsPage() {
 
   const togglePublish = async (product: ProductItem) => {
     try {
-      const docRef = doc(db, "products", product.id);
-      await updateDoc(docRef, { published: !product.published });
+      await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update",
+          collectionName: "products",
+          docId: product.id,
+          data: { published: !product.published },
+        }),
+      });
+
       setProducts((prev) =>
         prev.map((item) => (item.id === product.id ? { ...item, published: !item.published } : item))
       );
@@ -146,18 +271,43 @@ export default function AdminProductsPage() {
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       console.error("Error toggling publish:", err);
+      try {
+        const docRef = doc(db, "products", product.id);
+        await updateDoc(docRef, { published: !product.published });
+        setProducts((prev) =>
+          prev.map((item) => (item.id === product.id ? { ...item, published: !item.published } : item))
+        );
+      } catch (fErr) {
+        console.error("Fallback publish toggle failed:", fErr);
+      }
     }
   };
 
   const handleDelete = async (id: string) => {
     try {
-      await deleteDoc(doc(db, "products", id));
+      await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete",
+          collectionName: "products",
+          docId: id,
+        }),
+      });
+
       setProducts((prev) => prev.filter((item) => item.id !== id));
       setDeleteConfirmId(null);
       setFeedback("Product deleted.");
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       console.error("Error deleting product:", err);
+      try {
+        await deleteDoc(doc(db, "products", id));
+        setProducts((prev) => prev.filter((item) => item.id !== id));
+        setDeleteConfirmId(null);
+      } catch (fErr) {
+        console.error("Fallback delete product failed:", fErr);
+      }
     }
   };
 
@@ -216,9 +366,31 @@ export default function AdminProductsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {products.map((prod) => (
+                {products.map((prod, index) => (
                   <tr key={prod.id} className="hover:bg-surface-base/50 transition-colors">
-                    <td className="py-3.5 px-4 font-extrabold text-white">{prod.displayOrder}</td>
+                    <td className="py-3.5 px-4 font-extrabold text-white">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-5 text-center">{prod.displayOrder}</span>
+                        <div className="flex flex-col">
+                          <button
+                            disabled={index === 0}
+                            onClick={() => moveProduct(index, "up")}
+                            className="p-0.5 text-text-muted hover:text-accent disabled:opacity-20 cursor-pointer"
+                            title="Move Up"
+                          >
+                            <ArrowUp size={12} />
+                          </button>
+                          <button
+                            disabled={index === products.length - 1}
+                            onClick={() => moveProduct(index, "down")}
+                            className="p-0.5 text-text-muted hover:text-accent disabled:opacity-20 cursor-pointer"
+                            title="Move Down"
+                          >
+                            <ArrowDown size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    </td>
                     <td className="py-3.5 px-4 font-bold text-white">{prod.name}</td>
                     <td className="py-3.5 px-4">
                       <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase border ${

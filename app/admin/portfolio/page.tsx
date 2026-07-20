@@ -20,6 +20,8 @@ import {
   XCircle,
   X,
   Loader2,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 
 interface PortfolioProject {
@@ -53,6 +55,59 @@ export default function AdminPortfolioPage() {
       snap.forEach((docSnap) => {
         list.push({ ...docSnap.data(), id: docSnap.id } as PortfolioProject);
       });
+
+      if (list.length === 0) {
+        // Auto-seed default portfolio projects to Firestore so admin can manage them immediately
+        const initialProjects: Omit<PortfolioProject, "id">[] = [
+          {
+            name: "Enterprise Analytics Portal",
+            slug: "enterprise-analytics",
+            category: "Web Application",
+            shortDescription: "Real-time decision intelligence dashboard with custom telemetry and predictive workflow triggers.",
+            techTags: ["Next.js", "TypeScript", "Tailwind CSS", "Recharts"],
+            projectUrl: "https://awenue.io",
+            projectType: "Client Project",
+            imageUrl: "/images/hero/scene-01-business.jpg",
+            displayOrder: 1,
+            published: true,
+          },
+          {
+            name: "Cross-Platform Logistics Suite",
+            slug: "logistics-mobile-app",
+            category: "Mobile Application",
+            shortDescription: "Universal iOS & Android dispatch manager connecting drivers, hub controllers, and live fleet GPS.",
+            techTags: ["React Native", "Node.js", "PostgreSQL"],
+            projectUrl: "https://awenue.io",
+            projectType: "Client Project",
+            imageUrl: "/images/hero/scene-03-mobile.jpg",
+            displayOrder: 2,
+            published: true,
+          },
+          {
+            name: "Automated Lead Routing Engine",
+            slug: "ai-lead-automation",
+            category: "AI & Automation",
+            shortDescription: "Custom AI pipeline extracting inquiry metadata and orchestrating real-time CRM follow-ups.",
+            techTags: ["Python", "FastAPI", "OpenAI API", "Webhooks"],
+            projectUrl: "https://awenue.io",
+            projectType: "AWENUE Product",
+            imageUrl: "/images/hero/scene-04-ai.jpg",
+            displayOrder: 3,
+            published: true,
+          },
+        ];
+
+        for (const item of initialProjects) {
+          const docId = `proj-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+          await fetch("/api/admin/cms", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "set", collectionName: "portfolioProjects", docId, data: item }),
+          });
+          list.push({ ...item, id: docId });
+        }
+      }
+
       setProjects(list);
     } catch (err) {
       console.error("Error fetching portfolio projects:", err);
@@ -72,6 +127,7 @@ export default function AdminPortfolioPage() {
   }, [fetchProjects]);
 
   const openNewProject = () => {
+    const minOrder = projects.length > 0 ? Math.min(...projects.map((p) => p.displayOrder || 1)) : 1;
     setEditingProject({
       name: "",
       slug: "",
@@ -81,10 +137,45 @@ export default function AdminPortfolioPage() {
       projectUrl: "",
       projectType: "Client Project",
       imageUrl: "",
-      displayOrder: projects.length + 1,
+      displayOrder: minOrder <= 1 ? minOrder - 1 : 1,
       published: true,
     });
     setTechTagsText("");
+  };
+
+  const moveProject = async (index: number, direction: "up" | "down") => {
+    const targetIdx = direction === "up" ? index - 1 : index + 1;
+    if (targetIdx < 0 || targetIdx >= projects.length) return;
+
+    const current = { ...projects[index] };
+    const target = { ...projects[targetIdx] };
+
+    const tempOrder = current.displayOrder;
+    current.displayOrder = target.displayOrder;
+    target.displayOrder = tempOrder;
+
+    const updated = [...projects];
+    updated[index] = target;
+    updated[targetIdx] = current;
+    updated.sort((a, b) => a.displayOrder - b.displayOrder);
+    setProjects(updated);
+
+    try {
+      await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update", collectionName: "portfolioProjects", docId: current.id, data: { displayOrder: current.displayOrder } }),
+      });
+      await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update", collectionName: "portfolioProjects", docId: target.id, data: { displayOrder: target.displayOrder } }),
+      });
+      setFeedback("Display order updated.");
+      setTimeout(() => setFeedback(null), 2500);
+    } catch (err) {
+      console.error("Error updating display order:", err);
+    }
   };
 
   const openEditProject = (project: PortfolioProject) => {
@@ -116,21 +207,46 @@ export default function AdminPortfolioPage() {
     };
 
     try {
-      if (editingProject.id) {
-        await updateDoc(doc(db, "portfolioProjects", editingProject.id), payload);
-        setFeedback("Portfolio project updated.");
-      } else {
-        await addDoc(collection(db, "portfolioProjects"), {
-          ...payload,
-          createdAt: new Date().toISOString(),
-        });
-        setFeedback("New portfolio project created.");
+      const isEdit = Boolean(editingProject.id);
+      const action = isEdit ? "update" : "add";
+      const docId = editingProject.id || `portfolio-${Date.now()}`;
+
+      const res = await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          collectionName: "portfolioProjects",
+          docId,
+          data: payload,
+        }),
+      });
+
+      if (!res.ok) {
+        if (isEdit && editingProject.id) {
+          await updateDoc(doc(db, "portfolioProjects", editingProject.id), payload);
+        } else {
+          await addDoc(collection(db, "portfolioProjects"), { ...payload, createdAt: new Date().toISOString() });
+        }
       }
+
+      setFeedback(isEdit ? "Portfolio project updated." : "New portfolio project created.");
       setEditingProject(null);
       fetchProjects();
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       console.error("Error saving portfolio project:", err);
+      try {
+        if (editingProject.id) {
+          await updateDoc(doc(db, "portfolioProjects", editingProject.id), payload);
+        } else {
+          await addDoc(collection(db, "portfolioProjects"), { ...payload, createdAt: new Date().toISOString() });
+        }
+        setEditingProject(null);
+        fetchProjects();
+      } catch (fErr) {
+        console.error("Fallback portfolio save failed:", fErr);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -138,8 +254,17 @@ export default function AdminPortfolioPage() {
 
   const togglePublish = async (project: PortfolioProject) => {
     try {
-      const docRef = doc(db, "portfolioProjects", project.id);
-      await updateDoc(docRef, { published: !project.published });
+      await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update",
+          collectionName: "portfolioProjects",
+          docId: project.id,
+          data: { published: !project.published },
+        }),
+      });
+
       setProjects((prev) =>
         prev.map((item) => (item.id === project.id ? { ...item, published: !item.published } : item))
       );
@@ -147,18 +272,43 @@ export default function AdminPortfolioPage() {
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       console.error("Error toggling publish:", err);
+      try {
+        const docRef = doc(db, "portfolioProjects", project.id);
+        await updateDoc(docRef, { published: !project.published });
+        setProjects((prev) =>
+          prev.map((item) => (item.id === project.id ? { ...item, published: !item.published } : item))
+        );
+      } catch (fErr) {
+        console.error("Fallback publish toggle failed:", fErr);
+      }
     }
   };
 
   const handleDelete = async (id: string) => {
     try {
-      await deleteDoc(doc(db, "portfolioProjects", id));
+      await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete",
+          collectionName: "portfolioProjects",
+          docId: id,
+        }),
+      });
+
       setProjects((prev) => prev.filter((item) => item.id !== id));
       setDeleteConfirmId(null);
       setFeedback("Portfolio project deleted.");
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
-      console.error("Error deleting project:", err);
+      console.error("Error deleting portfolio project:", err);
+      try {
+        await deleteDoc(doc(db, "portfolioProjects", id));
+        setProjects((prev) => prev.filter((item) => item.id !== id));
+        setDeleteConfirmId(null);
+      } catch (fErr) {
+        console.error("Fallback delete portfolio failed:", fErr);
+      }
     }
   };
 
@@ -217,9 +367,31 @@ export default function AdminPortfolioPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {projects.map((proj) => (
+                {projects.map((proj, index) => (
                   <tr key={proj.id} className="hover:bg-surface-base/50 transition-colors">
-                    <td className="py-3.5 px-4 font-extrabold text-white">{proj.displayOrder}</td>
+                    <td className="py-3.5 px-4 font-extrabold text-white">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-5 text-center">{proj.displayOrder}</span>
+                        <div className="flex flex-col">
+                          <button
+                            disabled={index === 0}
+                            onClick={() => moveProject(index, "up")}
+                            className="p-0.5 text-text-muted hover:text-accent disabled:opacity-20 cursor-pointer"
+                            title="Move Up"
+                          >
+                            <ArrowUp size={12} />
+                          </button>
+                          <button
+                            disabled={index === projects.length - 1}
+                            onClick={() => moveProject(index, "down")}
+                            className="p-0.5 text-text-muted hover:text-accent disabled:opacity-20 cursor-pointer"
+                            title="Move Down"
+                          >
+                            <ArrowDown size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    </td>
                     <td className="py-3.5 px-4 font-bold text-white">{proj.name}</td>
                     <td className="py-3.5 px-4">{proj.category}</td>
                     <td className="py-3.5 px-4">

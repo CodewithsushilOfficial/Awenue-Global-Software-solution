@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -550,9 +550,54 @@ function SectionHeader() {
   );
 }
 
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function Services() {
   const { openModal } = useModal();
+  const [servicesList, setServicesList] = useState<any[]>([...SERVICES]);
+
+  useEffect(() => {
+    async function loadServices() {
+      try {
+        const snap = await getDocs(collection(db, "services"));
+        if (!snap.empty) {
+          const loaded: any[] = [];
+          snap.forEach((docSnap) => {
+            const data = docSnap.data();
+            if (data.published !== false) {
+              const defaultMatch = SERVICES.find((s) => s.id === docSnap.id || s.title.toLowerCase() === data.title?.toLowerCase());
+              loaded.push({
+                id: docSnap.id,
+                num: String(data.displayOrder || loaded.length + 1).padStart(2, "0"),
+                icon: defaultMatch ? defaultMatch.icon : Globe,
+                image: defaultMatch ? defaultMatch.image : "/images/services/web-dev.jpg",
+                color: defaultMatch ? defaultMatch.color : "#3B82F6",
+                colorRgb: defaultMatch ? defaultMatch.colorRgb : "59,130,246",
+                colorClass: defaultMatch ? defaultMatch.colorClass : "text-blue-400",
+                badgeBg: defaultMatch ? defaultMatch.badgeBg : "bg-blue-500/15 border-blue-400/30",
+                title: data.title,
+                subtitle: data.shortDescription || (defaultMatch ? defaultMatch.subtitle : "Build a Powerful Digital Presence."),
+                desc: data.detailedDescription || data.shortDescription,
+                features: data.features || (defaultMatch ? defaultMatch.features : []),
+                cta: data.ctaLabel || "Explore Service",
+                modalKey: "Website",
+                displayOrder: data.displayOrder ?? 99,
+              });
+            }
+          });
+          loaded.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+          if (loaded.length > 0) {
+            setServicesList(loaded);
+          }
+        }
+      } catch (err) {
+        console.warn("Using default static services (Firestore notice):", err);
+      }
+    }
+    loadServices();
+  }, []);
 
   return (
     <section id="services" className="bg-surface-base text-text-secondary py-24 sm:py-32 relative overflow-hidden">
@@ -574,7 +619,7 @@ export default function Services() {
 
         {/* 3×2 Card Grid — 3 columns, 2 rows */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 xl:gap-6">
-          {SERVICES.map((service, i) => (
+          {servicesList.map((service, i) => (
             <FlipCard
               key={service.id}
               service={service}

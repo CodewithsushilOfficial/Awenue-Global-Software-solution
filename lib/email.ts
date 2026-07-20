@@ -272,3 +272,71 @@ export async function sendConsultationEmails(data: ConsultationEmailData): Promi
     return { success: false, error: message };
   }
 }
+
+export interface AdminCustomerReplyData {
+  recipientEmail: string;
+  customerName: string;
+  subject: string;
+  message: string;
+  adminSenderEmail?: string;
+}
+
+export async function sendAdminCustomerReplyEmail(
+  data: AdminCustomerReplyData
+): Promise<{ success: boolean; error?: string }> {
+  const transporter = createTransporter();
+  const fromEmail =
+    process.env.NOTIFICATION_FROM ||
+    `"AWENUE Support" <Support@awenueglobalsoftwaresolutions.in>`;
+
+  if (!transporter) {
+    console.warn(
+      "[Nodemailer] SMTP is not configured. Customer email delivery skipped."
+    );
+    return { success: false, error: "SMTP not configured" };
+  }
+
+  try {
+    const html = `
+      <div style="font-family: Arial, sans-serif; background-color: #0A0F0D; color: #FFFFFF; padding: 32px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid rgba(255,255,255,0.1);">
+        <div style="text-align: center; margin-bottom: 24px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 16px;">
+          <h1 style="color: #FFFFFF; margin: 0; font-size: 24px; font-weight: 900;">AWEN<span style="color: #09B850;">UE</span></h1>
+          <p style="color: #A7B0AC; font-size: 12px; margin-top: 4px;">Avenue Global Software Solutions</p>
+        </div>
+        <p style="color: #A7B0AC; font-size: 14px;">Hi <strong>${escapeHtml(data.customerName)}</strong>,</p>
+        <div style="background-color: #121917; border-left: 4px solid #09B850; border-radius: 8px; padding: 20px; margin: 20px 0; font-size: 14px; line-height: 1.7; color: #E5E7EB; white-space: pre-wrap;">
+${escapeHtml(data.message)}
+        </div>
+        <p style="color: #A7B0AC; font-size: 13px; margin-top: 24px;">
+          If you have any further questions, simply reply to this email or visit us at <a href="https://awenueglobalsoftwaresolutions.in" style="color: #0BCF5F; text-decoration: underline;">awenueglobalsoftwaresolutions.in</a>.
+        </p>
+        <div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); color: #6B7280; font-size: 12px;">
+          — <strong>AWENUE Support Team</strong><br/>
+          <span>Avenue Global Software Solutions</span>
+        </div>
+      </div>
+    `;
+
+    const text = `Hi ${data.customerName},\n\n${data.message}\n\n— AWENUE Support Team\nAvenue Global Software Solutions`;
+
+    const info = await transporter.sendMail({
+      from: fromEmail,
+      to: data.recipientEmail,
+      subject: data.subject,
+      text,
+      html,
+    });
+
+    console.log(
+      `[Nodemailer] Customer reply email sent to ${data.recipientEmail}. MessageID:`,
+      info.messageId
+    );
+
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Email delivery failed";
+    console.error("[Nodemailer] Failed to send customer reply email:", err);
+    return { success: false, error: message };
+  }
+}
+

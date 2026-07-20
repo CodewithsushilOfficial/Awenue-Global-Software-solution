@@ -12,12 +12,27 @@ import {
   FolderKanban,
   Inbox,
   MessageSquare,
+  HelpCircle,
+  Users,
+  Mail,
   Settings,
+  UserCheck,
   LogOut,
   Menu,
   X,
   ShieldCheck,
+  Layers,
 } from "lucide-react";
+
+interface NavGroup {
+  label: string;
+  items: {
+    name: string;
+    href: string;
+    icon: React.ElementType;
+    badge?: string;
+  }[];
+}
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -32,29 +47,62 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }, [loading, user, isAdmin, isOtpVerified, pathname, router]);
 
-  // Skip layout sidebar for login page
   if (pathname === "/admin/login") {
     return <>{children}</>;
   }
 
-  // Render loading state while authenticating or redirecting
   if (loading || !user || !isAdmin || !isOtpVerified) {
     return (
-      <div className="min-h-screen bg-surface-base flex items-center justify-center text-text-muted text-sm">
+      <div className="min-h-screen bg-surface-base flex items-center justify-center text-text-muted text-sm font-bold">
         Authenticating admin session & 2FA security...
       </div>
     );
   }
 
-  const navItems = [
-    { name: "Overview", href: "/admin/dashboard", icon: LayoutDashboard },
-    { name: "Website Content", href: "/admin/content", icon: FileText },
-    { name: "Services", href: "/admin/services", icon: Briefcase },
-    { name: "Products", href: "/admin/products", icon: Package },
-    { name: "Portfolio", href: "/admin/portfolio", icon: FolderKanban },
-    { name: "Project Inquiries", href: "/admin/inquiries", icon: Inbox },
-    { name: "Consultations", href: "/admin/consultations", icon: MessageSquare },
-    { name: "Settings", href: "/admin/settings", icon: Settings },
+  const navGroups: NavGroup[] = [
+    {
+      label: "OVERVIEW",
+      items: [
+        { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
+      ],
+    },
+    {
+      label: "WEBSITE MANAGEMENT",
+      items: [
+        { name: "Website Content", href: "/admin/content", icon: FileText },
+        { name: "Services", href: "/admin/services", icon: Briefcase },
+        { name: "Products", href: "/admin/products", icon: Package },
+        { name: "Our Process", href: "/admin/process", icon: Layers },
+        { name: "Portfolio / Work", href: "/admin/portfolio", icon: FolderKanban },
+      ],
+    },
+    {
+      label: "CUSTOMER MANAGEMENT",
+      items: [
+        { name: "Users", href: "/admin/users", icon: Users },
+        { name: "Project Inquiries", href: "/admin/inquiries", icon: Inbox },
+        { name: "Consultations", href: "/admin/consultations", icon: MessageSquare },
+        { name: "General Queries", href: "/admin/queries", icon: HelpCircle },
+      ],
+    },
+    {
+      label: "COMMUNICATION",
+      items: [
+        { name: "Email / Communication", href: "/admin/communication", icon: Mail },
+      ],
+    },
+    {
+      label: "CONFIGURATION",
+      items: [
+        { name: "Website Settings", href: "/admin/settings", icon: Settings },
+      ],
+    },
+    {
+      label: "ACCOUNT",
+      items: [
+        { name: "Admin Profile", href: "/admin/profile", icon: UserCheck },
+      ],
+    },
   ];
 
   const handleLogout = async () => {
@@ -65,9 +113,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-surface-base flex text-text-secondary">
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex w-64 flex-col bg-surface-raised border-r border-border-dark shrink-0">
-        <div className="p-6 border-b border-border-dark flex items-center justify-between">
-          <Link href="/admin/dashboard" className="text-xl font-black tracking-wider text-white">
+      <aside className="hidden lg:flex w-64 flex-col bg-surface-raised border-r border-border-dark shrink-0 h-screen sticky top-0">
+        <div className="p-5 border-b border-border-dark flex items-center justify-between">
+          <Link href="/admin/dashboard" className="text-lg font-black tracking-wider text-white">
             AWEN<span className="text-accent">UE</span> CMS
           </Link>
           <span className="text-[10px] font-extrabold text-accent bg-accent/10 border border-accent/30 px-2 py-0.5 rounded">
@@ -75,35 +123,42 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </span>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.href;
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-colors ${
-                  isActive
-                    ? "bg-accent text-surface-base shadow-glow"
-                    : "text-text-muted hover:text-white hover:bg-surface-base"
-                }`}
-              >
-                <Icon size={16} />
-                <span>{item.name}</span>
-              </Link>
-            );
-          })}
+        <nav className="flex-1 p-3 space-y-4 overflow-y-auto custom-scrollbar">
+          {navGroups.map((group) => (
+            <div key={group.label} className="space-y-1">
+              <span className="px-3 text-[10px] font-black tracking-wider text-text-muted/60 uppercase block mb-1">
+                {group.label}
+              </span>
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href;
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                      isActive
+                        ? "bg-accent text-surface-base shadow-glow"
+                        : "text-text-muted hover:text-white hover:bg-surface-base"
+                    }`}
+                  >
+                    <Icon size={15} />
+                    <span>{item.name}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
-        <div className="p-4 border-t border-border-dark">
-          <div className="mb-3 px-3 py-2 bg-surface-base rounded-xl border border-white/10">
+        <div className="p-3 border-t border-border-dark">
+          <div className="mb-2 px-3 py-2 bg-surface-base rounded-xl border border-white/10">
             <span className="text-[10px] text-text-muted font-bold block">Logged in as</span>
             <span className="text-xs text-white font-bold truncate block">{user?.email || "Admin User"}</span>
           </div>
           <button
             onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 text-xs font-bold transition-colors cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 text-xs font-bold transition-colors cursor-pointer"
           >
             <LogOut size={14} />
             <span>Sign Out</span>
@@ -125,8 +180,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="p-6 border-b border-border-dark flex items-center justify-between">
-          <span className="text-xl font-black text-white">AWENUE Admin</span>
+        <div className="p-5 border-b border-border-dark flex items-center justify-between">
+          <span className="text-lg font-black text-white">AWENUE Admin</span>
           <button
             onClick={() => setIsMobileMenuOpen(false)}
             className="p-1 text-text-muted hover:text-white"
@@ -135,32 +190,39 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </button>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.href;
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-colors ${
-                  isActive
-                    ? "bg-accent text-surface-base"
-                    : "text-text-muted hover:text-white hover:bg-surface-base"
-                }`}
-              >
-                <Icon size={16} />
-                <span>{item.name}</span>
-              </Link>
-            );
-          })}
+        <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
+          {navGroups.map((group) => (
+            <div key={group.label} className="space-y-1">
+              <span className="px-3 text-[10px] font-black tracking-wider text-text-muted/60 uppercase block mb-1">
+                {group.label}
+              </span>
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href;
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                      isActive
+                        ? "bg-accent text-surface-base"
+                        : "text-text-muted hover:text-white hover:bg-surface-base"
+                    }`}
+                  >
+                    <Icon size={15} />
+                    <span>{item.name}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
-        <div className="p-4 border-t border-border-dark">
+        <div className="p-3 border-t border-border-dark">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 text-xs font-bold"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 text-xs font-bold"
           >
             <LogOut size={14} />
             <span>Sign Out</span>
@@ -169,9 +231,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
         {/* Top Header */}
-        <header className="h-16 bg-surface-raised border-b border-border-dark px-6 flex items-center justify-between">
+        <header className="h-16 bg-surface-raised border-b border-border-dark px-6 flex items-center justify-between sticky top-0 z-30">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsMobileMenuOpen(true)}
@@ -202,3 +264,4 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     </div>
   );
 }
+

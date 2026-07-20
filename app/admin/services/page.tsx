@@ -20,6 +20,8 @@ import {
   XCircle,
   X,
   Loader2,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 
 interface ServiceItem {
@@ -53,6 +55,95 @@ export default function AdminServicesPage() {
       snap.forEach((docSnap) => {
         list.push({ ...docSnap.data(), id: docSnap.id } as ServiceItem);
       });
+
+      if (list.length === 0) {
+        // Auto-seed default services to Firestore so admin can manage them immediately
+        const initialServices: Omit<ServiceItem, "id">[] = [
+          {
+            title: "Web Development",
+            slug: "web-development",
+            shortDescription: "Build a Powerful Digital Presence.",
+            detailedDescription: "Fast, responsive, conversion-focused websites that help your business look professional and grow online.",
+            iconIdentifier: "Globe",
+            features: ["Business & Corporate Websites", "E-Commerce Websites", "High-Converting Landing Pages", "Custom Web Applications", "Website Redesign & Modernization", "Maintenance & Performance Optimization"],
+            ctaLabel: "Explore Web Development",
+            ctaLink: "#contact",
+            displayOrder: 1,
+            published: true,
+          },
+          {
+            title: "SaaS Development",
+            slug: "saas-development",
+            shortDescription: "Turn Your Idea Into a Scalable Software Product.",
+            detailedDescription: "From MVP to a production-ready SaaS platform — designed for real users and built for future growth.",
+            iconIdentifier: "LayoutDashboard",
+            features: ["Product Strategy & Planning", "UI/UX Product Design", "MVP Development", "Custom SaaS Platforms", "Subscription & Payment Integration", "Scalable Cloud Architecture"],
+            ctaLabel: "Build Your SaaS",
+            ctaLink: "#contact",
+            displayOrder: 2,
+            published: true,
+          },
+          {
+            title: "Mobile App Development",
+            slug: "mobile-app-development",
+            shortDescription: "Take Your Business Wherever Your Customers Go.",
+            detailedDescription: "Intuitive, high-performance mobile applications that connect businesses with customers seamlessly.",
+            iconIdentifier: "Smartphone",
+            features: ["Android Applications", "iOS Applications", "Cross-Platform Apps", "Business & Enterprise Apps", "E-Commerce Applications", "App Maintenance & Updates"],
+            ctaLabel: "Build Your App",
+            ctaLink: "#contact",
+            displayOrder: 3,
+            published: true,
+          },
+          {
+            title: "AI & Automation",
+            slug: "ai-automation",
+            shortDescription: "Work Smarter. Automate the Repetitive.",
+            detailedDescription: "AI-powered automation that eliminates manual workflows — giving your team time to focus on what matters.",
+            iconIdentifier: "Bot",
+            features: ["Business Workflow Automation", "AI Chatbots & Assistants", "Lead Capture & Follow-Ups", "CRM Automation", "AI Integration With Existing Systems", "Custom AI-Powered Workflows"],
+            ctaLabel: "Automate Your Business",
+            ctaLink: "#contact",
+            displayOrder: 4,
+            published: true,
+          },
+          {
+            title: "Digital Marketing",
+            slug: "digital-marketing",
+            shortDescription: "Turn Your Digital Presence Into Business Growth.",
+            detailedDescription: "Reach the right audience, strengthen your online presence, and drive meaningful business growth.",
+            iconIdentifier: "BarChart3",
+            features: ["Search Engine Optimization — SEO", "Local SEO & Google Business Profile", "Social Media Marketing", "Content Marketing", "Performance Marketing", "Paid Advertising Campaigns"],
+            ctaLabel: "Grow Your Business",
+            ctaLink: "#contact",
+            displayOrder: 5,
+            published: true,
+          },
+          {
+            title: "Graphic Design & Branding",
+            slug: "graphic-design-branding",
+            shortDescription: "Build a Brand People Remember.",
+            detailedDescription: "Professional visual identities that make your business stand out — from logo to complete brand system.",
+            iconIdentifier: "Palette",
+            features: ["Logo Design", "Complete Brand Identity", "Brand Guidelines", "Social Media Creatives", "Marketing & Advertising Graphics", "UI/UX Design"],
+            ctaLabel: "Build Your Brand",
+            ctaLink: "#contact",
+            displayOrder: 6,
+            published: true,
+          },
+        ];
+
+        for (const item of initialServices) {
+          const docId = `serv-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+          await fetch("/api/admin/cms", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "set", collectionName: "services", docId, data: item }),
+          });
+          list.push({ ...item, id: docId });
+        }
+      }
+
       setServices(list);
     } catch (err) {
       console.error("Error fetching services:", err);
@@ -72,6 +163,7 @@ export default function AdminServicesPage() {
   }, [fetchServices]);
 
   const openNewService = () => {
+    const minOrder = services.length > 0 ? Math.min(...services.map((s) => s.displayOrder || 1)) : 1;
     setEditingService({
       title: "",
       slug: "",
@@ -81,10 +173,45 @@ export default function AdminServicesPage() {
       features: [],
       ctaLabel: "Explore Service",
       ctaLink: "#contact",
-      displayOrder: services.length + 1,
+      displayOrder: minOrder <= 1 ? minOrder - 1 : 1,
       published: true,
     });
     setFeaturesText("");
+  };
+
+  const moveService = async (index: number, direction: "up" | "down") => {
+    const targetIdx = direction === "up" ? index - 1 : index + 1;
+    if (targetIdx < 0 || targetIdx >= services.length) return;
+
+    const current = { ...services[index] };
+    const target = { ...services[targetIdx] };
+
+    const tempOrder = current.displayOrder;
+    current.displayOrder = target.displayOrder;
+    target.displayOrder = tempOrder;
+
+    const updated = [...services];
+    updated[index] = target;
+    updated[targetIdx] = current;
+    updated.sort((a, b) => a.displayOrder - b.displayOrder);
+    setServices(updated);
+
+    try {
+      await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update", collectionName: "services", docId: current.id, data: { displayOrder: current.displayOrder } }),
+      });
+      await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update", collectionName: "services", docId: target.id, data: { displayOrder: target.displayOrder } }),
+      });
+      setFeedback("Display order updated.");
+      setTimeout(() => setFeedback(null), 2500);
+    } catch (err) {
+      console.error("Error updating display order:", err);
+    }
   };
 
   const openEditService = (service: ServiceItem) => {
@@ -103,7 +230,7 @@ export default function AdminServicesPage() {
 
     const payload = {
       title: editingService.title,
-      slug: editingService.slug || editingService.title.toLowerCase().replace(/[^a-z0-0]+/g, "-"),
+      slug: editingService.slug || editingService.title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
       shortDescription: editingService.shortDescription,
       detailedDescription: editingService.detailedDescription || editingService.shortDescription,
       iconIdentifier: editingService.iconIdentifier || "Globe",
@@ -116,23 +243,46 @@ export default function AdminServicesPage() {
     };
 
     try {
-      if (editingService.id) {
-        // Edit
-        await updateDoc(doc(db, "services", editingService.id), payload);
-        setFeedback("Service updated successfully.");
-      } else {
-        // Create
-        await addDoc(collection(db, "services"), {
-          ...payload,
-          createdAt: new Date().toISOString(),
-        });
-        setFeedback("New service created successfully.");
+      const isEdit = Boolean(editingService.id);
+      const action = isEdit ? "update" : "add";
+      const docId = editingService.id || `service-${Date.now()}`;
+
+      const res = await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          collectionName: "services",
+          docId,
+          data: payload,
+        }),
+      });
+
+      if (!res.ok) {
+        if (isEdit && editingService.id) {
+          await updateDoc(doc(db, "services", editingService.id), payload);
+        } else {
+          await addDoc(collection(db, "services"), { ...payload, createdAt: new Date().toISOString() });
+        }
       }
+
+      setFeedback(isEdit ? "Service updated successfully." : "New service created successfully.");
       setEditingService(null);
       fetchServices();
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       console.error("Error saving service:", err);
+      try {
+        if (editingService.id) {
+          await updateDoc(doc(db, "services", editingService.id), payload);
+        } else {
+          await addDoc(collection(db, "services"), { ...payload, createdAt: new Date().toISOString() });
+        }
+        setEditingService(null);
+        fetchServices();
+      } catch (fErr) {
+        console.error("Fallback service save failed:", fErr);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -140,8 +290,17 @@ export default function AdminServicesPage() {
 
   const togglePublish = async (service: ServiceItem) => {
     try {
-      const docRef = doc(db, "services", service.id);
-      await updateDoc(docRef, { published: !service.published });
+      await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update",
+          collectionName: "services",
+          docId: service.id,
+          data: { published: !service.published },
+        }),
+      });
+
       setServices((prev) =>
         prev.map((item) => (item.id === service.id ? { ...item, published: !item.published } : item))
       );
@@ -149,18 +308,43 @@ export default function AdminServicesPage() {
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       console.error("Error toggling publish:", err);
+      try {
+        const docRef = doc(db, "services", service.id);
+        await updateDoc(docRef, { published: !service.published });
+        setServices((prev) =>
+          prev.map((item) => (item.id === service.id ? { ...item, published: !item.published } : item))
+        );
+      } catch (fErr) {
+        console.error("Fallback publish toggle failed:", fErr);
+      }
     }
   };
 
   const handleDelete = async (id: string) => {
     try {
-      await deleteDoc(doc(db, "services", id));
+      await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete",
+          collectionName: "services",
+          docId: id,
+        }),
+      });
+
       setServices((prev) => prev.filter((item) => item.id !== id));
       setDeleteConfirmId(null);
       setFeedback("Service deleted.");
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       console.error("Error deleting service:", err);
+      try {
+        await deleteDoc(doc(db, "services", id));
+        setServices((prev) => prev.filter((item) => item.id !== id));
+        setDeleteConfirmId(null);
+      } catch (fErr) {
+        console.error("Fallback delete service failed:", fErr);
+      }
     }
   };
 
@@ -222,9 +406,31 @@ export default function AdminServicesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {services.map((serv) => (
+                {services.map((serv, index) => (
                   <tr key={serv.id} className="hover:bg-surface-base/50 transition-colors">
-                    <td className="py-3.5 px-4 font-extrabold text-white">{serv.displayOrder}</td>
+                    <td className="py-3.5 px-4 font-extrabold text-white">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-5 text-center">{serv.displayOrder}</span>
+                        <div className="flex flex-col">
+                          <button
+                            disabled={index === 0}
+                            onClick={() => moveService(index, "up")}
+                            className="p-0.5 text-text-muted hover:text-accent disabled:opacity-20 cursor-pointer"
+                            title="Move Up"
+                          >
+                            <ArrowUp size={12} />
+                          </button>
+                          <button
+                            disabled={index === services.length - 1}
+                            onClick={() => moveService(index, "down")}
+                            className="p-0.5 text-text-muted hover:text-accent disabled:opacity-20 cursor-pointer"
+                            title="Move Down"
+                          >
+                            <ArrowDown size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    </td>
                     <td className="py-3.5 px-4 font-bold text-white">{serv.title}</td>
                     <td className="py-3.5 px-4 max-w-xs truncate">{serv.shortDescription}</td>
                     <td className="py-3.5 px-4 font-semibold text-accent">

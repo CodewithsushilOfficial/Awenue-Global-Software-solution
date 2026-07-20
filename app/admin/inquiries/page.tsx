@@ -23,7 +23,9 @@ import {
   Building,
   Calendar,
   DollarSign,
+  MessageCircle,
 } from "lucide-react";
+import EmailReplyModal from "@/components/admin/EmailReplyModal";
 
 interface ProjectInquiry {
   id: string;
@@ -53,6 +55,8 @@ export default function AdminInquiriesPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [replyModalOpen, setReplyModalOpen] = useState(false);
+
 
   const fetchInquiries = useCallback(async () => {
     try {
@@ -90,13 +94,28 @@ export default function AdminInquiriesPage() {
     if (!selectedInquiry) return;
     setIsUpdating(true);
     try {
-      const docRef = doc(db, "projectInquiries", selectedInquiry.id);
       const updatedAt = new Date().toISOString();
-      await updateDoc(docRef, {
+      const payload = {
         status: statusInput,
         adminNotes: notesInput,
         updatedAt,
+      };
+
+      const res = await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update",
+          collectionName: "projectInquiries",
+          docId: selectedInquiry.id,
+          data: payload,
+        }),
       });
+
+      if (!res.ok) {
+        const docRef = doc(db, "projectInquiries", selectedInquiry.id);
+        await updateDoc(docRef, payload);
+      }
 
       setInquiries((prev) =>
         prev.map((item) =>
@@ -111,6 +130,20 @@ export default function AdminInquiriesPage() {
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       console.error("Error updating inquiry:", err);
+      try {
+        const docRef = doc(db, "projectInquiries", selectedInquiry.id);
+        await updateDoc(docRef, { status: statusInput, adminNotes: notesInput, updatedAt: new Date().toISOString() });
+        setInquiries((prev) =>
+          prev.map((item) =>
+            item.id === selectedInquiry.id
+              ? { ...item, status: statusInput, adminNotes: notesInput }
+              : item
+          )
+        );
+        setSelectedInquiry(null);
+      } catch (fErr) {
+        console.error("Fallback update inquiry failed:", fErr);
+      }
     } finally {
       setIsUpdating(false);
     }
@@ -118,7 +151,16 @@ export default function AdminInquiriesPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      await deleteDoc(doc(db, "projectInquiries", id));
+      await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete",
+          collectionName: "projectInquiries",
+          docId: id,
+        }),
+      });
+
       setInquiries((prev) => prev.filter((item) => item.id !== id));
       setDeleteConfirmId(null);
       if (selectedInquiry?.id === id) setSelectedInquiry(null);
@@ -126,6 +168,14 @@ export default function AdminInquiriesPage() {
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       console.error("Error deleting inquiry:", err);
+      try {
+        await deleteDoc(doc(db, "projectInquiries", id));
+        setInquiries((prev) => prev.filter((item) => item.id !== id));
+        setDeleteConfirmId(null);
+        if (selectedInquiry?.id === id) setSelectedInquiry(null);
+      } catch (fErr) {
+        console.error("Fallback delete inquiry failed:", fErr);
+      }
     }
   };
 
@@ -361,6 +411,16 @@ export default function AdminInquiriesPage() {
               </p>
             </div>
 
+            {/* Email Communication Action */}
+            <div className="flex items-center justify-between border-t border-white/10 pt-4">
+              <button
+                onClick={() => setReplyModalOpen(true)}
+                className="px-4 py-2 bg-accent text-surface-base text-xs font-extrabold rounded-xl hover:bg-accent-hover shadow-glow flex items-center gap-2 cursor-pointer"
+              >
+                <MessageCircle size={15} /> Reply via Email
+              </button>
+            </div>
+
             {/* Update Form */}
             <div className="space-y-4 pt-2 border-t border-white/10">
               <div>
@@ -413,6 +473,25 @@ export default function AdminInquiriesPage() {
         </div>
       )}
 
+      {/* Reply Modal */}
+      {selectedInquiry && (
+        <EmailReplyModal
+          isOpen={replyModalOpen}
+          onClose={() => setReplyModalOpen(false)}
+          recipientEmail={selectedInquiry.email}
+          customerName={selectedInquiry.fullName}
+          leadId={selectedInquiry.id}
+          leadType="projectInquiry"
+          defaultSubject={`Re: AWENUE Project Request — ${selectedInquiry.projectType}`}
+          onSuccess={() => {
+            fetchInquiries();
+            if (selectedInquiry) {
+              setSelectedInquiry({ ...selectedInquiry, status: "contacted" });
+            }
+          }}
+        />
+      )}
+
       {/* Delete Confirmation Modal */}
       {deleteConfirmId && (
         <div className="fixed inset-0 z-50 bg-surface-base/80 backdrop-blur-md flex items-center justify-center p-4">
@@ -438,6 +517,7 @@ export default function AdminInquiriesPage() {
           </div>
         </div>
       )}
+
     </div>
   );
 }

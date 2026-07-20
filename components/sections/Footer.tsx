@@ -1,14 +1,55 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { newsletterSchema, type NewsletterFormValues } from "@/lib/validations";
 import { Loader2, MapPin, Mail, ArrowRight, CheckCircle2 } from "lucide-react";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 export default function Footer() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+
+  const [cmsData, setCmsData] = useState({
+    footerBrandDesc:
+      "We build high-converting websites, mobile applications, scalable SaaS platforms, and custom AI automation for forward-thinking businesses.",
+    footerAddress: "Varanasi, Uttar Pradesh, India",
+    footerEmail: "hello@awenue.io",
+    footerCopyright: "© 2026 Avenue Global Software Solutions. All Rights Reserved.",
+  });
+
+  useEffect(() => {
+    async function loadFooterCms() {
+      try {
+        const snap = await getDoc(doc(db, "websiteContent", "homepage"));
+        if (snap.exists()) {
+          const data = snap.data();
+          setCmsData((prev) => ({
+            footerBrandDesc: data.footerBrandDesc || prev.footerBrandDesc,
+            footerAddress: data.footerAddress || prev.footerAddress,
+            footerEmail: data.footerEmail || prev.footerEmail,
+            footerCopyright: data.footerCopyright || prev.footerCopyright,
+          }));
+        } else {
+          const altSnap = await getDoc(doc(db, "adminSettings", "general"));
+          if (altSnap.exists()) {
+            const data = altSnap.data();
+            setCmsData((prev) => ({
+              footerBrandDesc: prev.footerBrandDesc,
+              footerAddress: data.businessAddress || prev.footerAddress,
+              footerEmail: data.businessEmail || prev.footerEmail,
+              footerCopyright: prev.footerCopyright,
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn("Footer CMS load notice:", err);
+      }
+    }
+    loadFooterCms();
+  }, []);
 
   const {
     register,
@@ -75,7 +116,7 @@ export default function Footer() {
             </div>
 
             <p className="text-text-muted text-sm font-normal leading-relaxed max-w-sm">
-              We build high-converting websites, mobile applications, scalable SaaS platforms, and custom AI automation for forward-thinking businesses.
+              {cmsData.footerBrandDesc}
             </p>
 
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-accent/30 bg-accent/10 text-accent text-xs font-bold">
@@ -86,15 +127,15 @@ export default function Footer() {
             <div className="pt-2 space-y-2.5">
               <div className="flex items-center gap-2.5 text-xs text-text-muted">
                 <MapPin size={15} className="text-accent shrink-0" />
-                <span>Varanasi, Uttar Pradesh, India</span>
+                <span>{cmsData.footerAddress}</span>
               </div>
               <div className="flex items-center gap-2.5 text-xs text-text-muted">
                 <Mail size={15} className="text-accent shrink-0" />
                 <a
-                  href="mailto:hello@awenue.io"
+                  href={`mailto:${cmsData.footerEmail}`}
                   className="text-accent hover:text-accent-tint font-bold transition-colors"
                 >
-                  hello@awenue.io
+                  {cmsData.footerEmail}
                 </a>
               </div>
             </div>
@@ -181,6 +222,7 @@ export default function Footer() {
                   {...register("email")}
                   className="w-full bg-surface-raised border border-white/15 px-3.5 py-2.5 rounded-xl text-text-secondary outline-none text-xs transition-colors h-11 focus:border-accent"
                   aria-label="Work email for newsletter"
+                  suppressHydrationWarning
                 />
                 <button
                   type="submit"
@@ -217,7 +259,7 @@ export default function Footer() {
           </div>
 
           <p className="text-xs text-text-muted text-center select-none">
-            &copy; 2026 Avenue Global Software Solutions. All Rights Reserved.
+            {cmsData.footerCopyright}
           </p>
 
           <div className="flex items-center gap-5 text-xs text-text-muted">

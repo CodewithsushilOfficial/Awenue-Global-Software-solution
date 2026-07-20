@@ -1,0 +1,110 @@
+import { NextRequest, NextResponse } from "next/server";
+import { adminAuth, adminDb } from "@/lib/firebase-admin";
+
+export async function GET() {
+  try {
+    // 1. Fetch users from Firestore 'users' collection
+    const usersSnap = await adminDb.collection("users").get();
+    const usersMap = new Map<string, any>();
+
+    usersSnap.forEach((docSnap) => {
+      usersMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() });
+    });
+
+    // 2. Fetch users from Firebase Auth listUsers
+    let authUsers: any[] = [];
+    try {
+      const listUsersResult = await adminAuth.listUsers(100);
+      authUsers = listUsersResult.users.map((userRecord) => {
+        const existingDoc = usersMap.get(userRecord.uid);
+        return {
+          id: userRecord.uid,
+          uid: userRecord.uid,
+          email: userRecord.email || existingDoc?.email || "No Email",
+          fullName: userRecord.displayName || existingDoc?.fullName || "User Account",
+          phone: userRecord.phoneNumber || existingDoc?.phone || null,
+          disabled: userRecord.disabled || false,
+          status: userRecord.disabled ? "disabled" : "active",
+          createdAt:
+            userRecord.metadata.creationTime || existingDoc?.createdAt || new Date().toISOString(),
+          lastLogin: userRecord.metadata.lastSignInTime || null,
+        };
+      });
+    } catch (authErr) {
+      console.warn("Notice: Auth user listing fallback to Firestore records:", authErr);
+      authUsers = Array.from(usersMap.values()).map((userDoc) => ({
+        id: userDoc.id,
+        uid: userDoc.id,
+        email: userDoc.email || "No Email",
+        fullName: userDoc.fullName || "Registered User",
+        phone: userDoc.phone || null,
+        disabled: userDoc.disabled || false,
+        status: userDoc.disabled ? "disabled" : "active",
+        createdAt: userDoc.createdAt || new Date().toISOString(),
+        lastLogin: userDoc.lastLogin || null,
+      }));
+    }
+
+    return NextResponse.json({ success: true, users: authUsers }, { status: 200 });
+  } catch (err: unknown) {
+    console.error("API /api/admin/users GET error:", err);
+    return NextResponse.json(
+      { error: "Failed to fetch registered users." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { uid, disabled } = body;
+
+    if (!uid) {
+      return NextResponse.json({ error: "User ID (uid) is required." }, { status: 400 });
+    }
+
+    // 1. Update status in Firebase Auth via Admin SDK
+    try {
+      await adminAuth.updateUser(uid, { disabled: Boolean(disabled) });
+    } catch (authErr) {
+      console.warn("Notice: Auth user state update:", authErr);
+    }
+
+    // 2. Update status in Firestore 'users' collection
+    const userRef = adminDb.collection("users").doc(uid);
+    const userSnap = await userRef.get();
+    const newStatus = disabled ? "disabled" : "active";
+
+    if (userSnap.exists) {
+      await userRef.update({
+        disabled: Boolean(disabled),
+        status: newStatus,
+        updatedAt: new Date().toISOString(),
+      });
+    } else {
+      await userRef.set({
+        disabled: Boolean(disabled),
+        status: newStatus,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: `User account has been ${disabled ? "disabled" : "enabled"}.`,
+        uid,
+        disabled: Boolean(disabled),
+        status: newStatus,
+      },
+      { status: 200 }
+    );
+  } catch (err: unknown) {
+    console.error("API /api/admin/users POST error:", err);
+    return NextResponse.json(
+      { error: "Failed to update user account status." },
+      { status: 500 }
+    );
+  }
+}

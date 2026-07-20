@@ -1,13 +1,45 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { motion } from "motion/react";
 import RevealOnScroll from "@/components/motion/RevealOnScroll";
 import { useModal } from "@/components/providers/ModalProvider";
 import { ArrowRight, Sparkles, MessageSquare, ShieldCheck, Zap } from "lucide-react";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 export default function FinalCTA() {
   const { openModal } = useModal();
+  const [cmsContent, setCmsContent] = useState({
+    finalCtaEyebrow: "LET'S BUILD SOMETHING GREAT",
+    finalCtaHeading: "Ready to Take Your Business Digital?",
+    finalCtaDescription:
+      "Whether you need your first website, have a new product idea, or want to automate and grow your existing business — let's make it happen together.",
+    finalCtaPrimary: "Start Your Project",
+    finalCtaSecondary: "Get Free Consultation",
+  });
+
+  useEffect(() => {
+    async function loadCms() {
+      try {
+        const snap = await getDoc(doc(db, "websiteContent", "homepage"));
+        if (snap.exists()) {
+          const data = snap.data();
+          setCmsContent((prev) => ({
+            finalCtaEyebrow: data.finalCtaEyebrow || prev.finalCtaEyebrow,
+            finalCtaHeading: data.finalCtaHeading || prev.finalCtaHeading,
+            finalCtaDescription: data.finalCtaDescription || prev.finalCtaDescription,
+            finalCtaPrimary: data.finalCtaPrimary || prev.finalCtaPrimary,
+            finalCtaSecondary: data.finalCtaSecondary || prev.finalCtaSecondary,
+          }));
+        }
+      } catch (err) {
+        console.warn("FinalCTA CMS load notice:", err);
+      }
+    }
+    loadCms();
+  }, []);
 
   return (
     <section
@@ -65,25 +97,21 @@ export default function FinalCTA() {
           <div className="inline-flex items-center gap-2 px-4 py-1.5 border border-accent/40 bg-accent/15 backdrop-blur-md text-accent text-eyebrow rounded-full mb-8 shadow-lg">
             <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
             <Sparkles size={13} aria-hidden="true" />
-            <span className="font-extrabold tracking-widest text-[11px]">LET&apos;S BUILD SOMETHING GREAT</span>
+            <span className="font-extrabold tracking-widest text-[11px] uppercase">{cmsContent.finalCtaEyebrow}</span>
           </div>
         </RevealOnScroll>
 
         {/* Title */}
         <RevealOnScroll delay={0.15}>
           <h2 className="text-3xl sm:text-5xl md:text-6xl font-black text-text-secondary mb-6 leading-[1.12] tracking-tight max-w-3xl">
-            Ready to Take Your Business{" "}
-            <span className="text-transparent bg-clip-text bg-linear-to-r from-accent via-emerald-300 to-accent-tint">
-              Digital?
-            </span>
+            {cmsContent.finalCtaHeading}
           </h2>
         </RevealOnScroll>
 
         {/* Subtitle */}
         <RevealOnScroll delay={0.2} className="max-w-2xl mx-auto">
           <p className="text-text-muted text-base sm:text-lg leading-relaxed font-normal mb-10">
-            Whether you need your first website, have a new product idea, or want to automate and grow your existing business —{" "}
-            <strong className="text-text-secondary font-semibold">let&apos;s make it happen together.</strong>
+            {cmsContent.finalCtaDescription}
           </p>
         </RevealOnScroll>
 
@@ -97,7 +125,7 @@ export default function FinalCTA() {
               transition={{ type: "spring", stiffness: 300, damping: 20 }}
               className="bg-accent text-surface-base font-extrabold text-base px-9 py-4 rounded-xl shadow-glow transition-all outline-none focus-visible:outline-2 focus-visible:outline-accent-tint cursor-pointer flex items-center justify-center gap-2.5 w-full sm:w-auto"
             >
-              <span>Start Your Project</span>
+              <span>{cmsContent.finalCtaPrimary}</span>
               <ArrowRight size={18} aria-hidden="true" />
             </motion.button>
 
@@ -108,7 +136,7 @@ export default function FinalCTA() {
               className="border border-white/20 bg-surface-raised/80 backdrop-blur-md text-text-secondary font-bold text-base px-8 py-4 rounded-xl transition-all outline-none focus-visible:outline-2 focus-visible:outline-accent-tint cursor-pointer flex items-center justify-center gap-2 w-full sm:w-auto"
             >
               <MessageSquare size={16} className="text-accent" />
-              <span>Get Free Consultation</span>
+              <span>{cmsContent.finalCtaSecondary}</span>
             </motion.button>
           </div>
         </RevealOnScroll>
