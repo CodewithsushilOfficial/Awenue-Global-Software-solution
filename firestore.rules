@@ -1,127 +1,235 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // HELPER FUNCTIONS
-    // ─────────────────────────────────────────────────────────────────────────
+    // =========================================================
+    // HELPERS
+    // =========================================================
 
-    // Authenticated Firebase user with verified admin custom claim or admin auth
-    function isFirebaseAdmin() {
-      return request.auth != null;
-    }
-
-    // Authenticated user (any Firebase auth)
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // ADMIN SECURITY COLLECTIONS
-    // ─────────────────────────────────────────────────────────────────────────
+    // True when the signed-in user has an active record in /admins
+    function adminExists() {
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function currentAdmin() {
+      return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data;
+    }
+
+    function isActiveAdmin() {
+      return adminExists()
+        && currentAdmin().status == 'active';
+    }
+
+    function isSuperAdmin() {
+      return isActiveAdmin()
+        && currentAdmin().role == 'super_admin';
+    }
+
+    // =========================================================
+    // ADMIN COLLECTION
+    //
+    // All create / update / delete must go through secure
+    // Next.js server APIs using Firebase Admin SDK.
+    // Firebase Admin SDK bypasses these rules.
+    //
+    // Active admins may read the collection so the dashboard
+    // can list admins (client-side GET via authenticated session).
+    // =========================================================
 
     match /admins/{adminId} {
-      allow create, read: if true; // Allows pre-authorization, bootstrapping & token validation
-      allow update, delete: if isAuthenticated() || isFirebaseAdmin();
+      // Active admins can read admin records (dashboard listing)
+      allow read: if isActiveAdmin();
+
+      // All writes go through the server API (Admin SDK bypasses rules)
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
     }
+
+    // =========================================================
+    // ADMIN INVITATIONS
+    //
+    // Invitation creation, resend, revoke, deletion, and
+    // activation all happen through secure server APIs.
+    // Token hashes must never be publicly readable.
+    // =========================================================
 
     match /adminInvitations/{invitationId} {
-      allow create, read: if true; // Allows pre-authorization & public invitation token validation
-      allow update, delete: if isAuthenticated() || isFirebaseAdmin();
+      allow read: if isActiveAdmin();
+
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
     }
+
+    // =========================================================
+    // ADMIN ACTIVITY LOGS
+    // =========================================================
 
     match /adminActivityLogs/{logId} {
-      allow create: if true;
-      allow read, update, delete: if isAuthenticated() || isFirebaseAdmin();
+      allow read: if isActiveAdmin();
+
+      // Server only
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
     }
+
+    // =========================================================
+    // ADMIN AUDIT LOGS — Super Admin only, immutable from client
+    // =========================================================
 
     match /adminAuditLogs/{logId} {
-      allow create: if true;
-      allow read, update, delete: if isAuthenticated() || isFirebaseAdmin();
+      allow read: if isSuperAdmin();
+
+      // Server only
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
     }
+
+    // =========================================================
+    // ADMIN SETTINGS
+    // =========================================================
 
     match /adminSettings/{settingId} {
-      allow read, write, create, update, delete: if isAuthenticated() || isFirebaseAdmin();
+      allow read: if isActiveAdmin();
+
+      // Server only
+      allow create, update, delete: if false;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // REGISTERED USERS COLLECTION
-    // ─────────────────────────────────────────────────────────────────────────
+    // =========================================================
+    // REGISTERED USERS
+    // =========================================================
 
     match /users/{userId} {
-      allow read, write: if true;
+      allow create: if isAuthenticated()
+        && request.auth.uid == userId;
+
+      allow read: if isAuthenticated()
+        && (request.auth.uid == userId || isActiveAdmin());
+
+      allow update: if isAuthenticated()
+        && request.auth.uid == userId;
+
+      allow delete: if false;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // PUBLIC WEBSITE CONTENT — Readable by all, write via admin auth / server
-    // ─────────────────────────────────────────────────────────────────────────
+    // =========================================================
+    // WEBSITE CONTENT — public read, server-only write
+    // =========================================================
 
     match /websiteContent/{docId} {
       allow read: if true;
-      allow write, create, update, delete: if true;
+      allow create, update, delete: if false;
     }
 
     match /siteContent/{docId} {
       allow read: if true;
-      allow write, create, update, delete: if true;
+      allow create, update, delete: if false;
     }
+
+    // =========================================================
+    // SERVICES — public read, server-only write
+    // =========================================================
 
     match /services/{serviceId} {
       allow read: if true;
-      allow write, create, update, delete: if true;
+      allow create, update, delete: if false;
     }
+
+    // =========================================================
+    // PRODUCTS — public read, server-only write
+    // =========================================================
 
     match /products/{productId} {
       allow read: if true;
-      allow write, create, update, delete: if true;
+      allow create, update, delete: if false;
     }
+
+    // =========================================================
+    // PROCESS STEPS — public read, server-only write
+    // =========================================================
 
     match /processSteps/{stepId} {
       allow read: if true;
-      allow write, create, update, delete: if true;
+      allow create, update, delete: if false;
     }
+
+    // =========================================================
+    // PORTFOLIO — public read, server-only write
+    // =========================================================
 
     match /portfolio/{portfolioId} {
       allow read: if true;
-      allow write, create, update, delete: if true;
+      allow create, update, delete: if false;
     }
 
     match /portfolioProjects/{portfolioId} {
       allow read: if true;
-      allow write, create, update, delete: if true;
+      allow create, update, delete: if false;
     }
+
+    // =========================================================
+    // PUBLIC SETTINGS — public read, server-only write
+    // =========================================================
 
     match /settings/{settingId} {
       allow read: if true;
-      allow write, create, update, delete: if true;
+      allow create, update, delete: if false;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // BUSINESS LEADS & INQUIRIES
-    // Public can create (contact forms), authenticated admins can manage
-    // ─────────────────────────────────────────────────────────────────────────
+    // =========================================================
+    // PROJECT INQUIRIES
+    //
+    // Public can submit. Management via Admin server APIs.
+    // Public must NOT be able to read other users' submissions.
+    // =========================================================
 
     match /projectInquiries/{inquiryId} {
       allow create: if true;
-      allow read, update, delete: if true;
+      allow read, update, delete: if false;
     }
+
+    // =========================================================
+    // CONSULTATION REQUESTS
+    // =========================================================
 
     match /consultationRequests/{consultationId} {
       allow create: if true;
-      allow read, update, delete: if true;
+      allow read, update, delete: if false;
     }
+
+    // =========================================================
+    // GENERAL QUERIES
+    // =========================================================
 
     match /generalQueries/{queryId} {
       allow create: if true;
-      allow read, update, delete: if true;
+      allow read, update, delete: if false;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // COMMUNICATION RECORDS
-    // ─────────────────────────────────────────────────────────────────────────
+    // =========================================================
+    // EMAIL COMMUNICATIONS — fully locked (server only)
+    // =========================================================
 
     match /emailCommunications/{commId} {
-      allow read, write, create, update, delete: if true;
+      allow read, write, create, update, delete: if false;
+    }
+
+    // =========================================================
+    // DEFAULT DENY — reject any uncovered collection
+    // =========================================================
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

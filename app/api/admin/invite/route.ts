@@ -663,98 +663,189 @@ export async function PATCH(request: NextRequest) {
 // DELETE: Permanently Delete Admin / Invitation from Firestore Database
 // ─────────────────────────────────────────────────────────────────────────────
 export async function DELETE(request: NextRequest) {
+  // ── 1. Authenticate caller ───────────────────────────────────────────
   const actor = await getAdminFromRequest(request);
   if (!actor) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
+  // ── 2. Require Super Admin or explicit manage_admins permission ────────────
   if (!hasPermission(actor.role, "manage_admins", actor.permissions) && actor.role !== "super_admin") {
-    return NextResponse.json({ error: "Only Super Admins can delete administrators." }, { status: 403 });
+    return NextResponse.json({ error: "Only Super Admins can permanently delete administrators." }, { status: 403 });
   }
 
+  // ── 3. Resolve target ID from query params ──────────────────────────
   const { searchParams } = new URL(request.url);
   const targetId =
     searchParams.get("targetAdminId") ||
     searchParams.get("adminId") ||
     searchParams.get("invitationId");
 
-  if (!targetId) {
-    return NextResponse.json({ error: "adminId or invitationId is required." }, { status: 400 });
+  if (!targetId || typeof targetId !== "string" || !targetId.trim()) {
+    return NextResponse.json({ error: "targetAdminId is required." }, { status: 400 });
   }
 
-  if (targetId === "super_admin_permanent" || targetId === actor.id) {
-    return NextResponse.json({ error: "You cannot delete the primary Super Admin account." }, { status: 400 });
+  const cleanTargetId = targetId.trim();
+
+  // ── 4. Block deletion of the permanent bootstrap Super Admin ────────────
+  if (cleanTargetId === "super_admin_permanent") {
+    return NextResponse.json(
+      { error: "The bootstrap Super Admin account cannot be deleted." },
+      { status: 403 }
+    );
+  }
+
+  // ── 5. Block self-deletion (by document ID) ──────────────────────────
+  if (cleanTargetId === actor.id) {
+    return NextResponse.json(
+      { error: "You cannot delete your own Admin account." },
+      { status: 403 }
+    );
+  }
+
+  // ── 6. Require Firebase Admin SDK — no insecure fallback for privileged deletes ─
+  if (!isAdminCertAvailable()) {
+    console.error("[ADMIN DELETE] Firebase Admin SDK credentials not available. Ensure FIREBASE_ADMIN_PRIVATE_KEY and FIREBASE_ADMIN_CLIENT_EMAIL are set in Vercel environment variables.");
+    return NextResponse.json(
+      {
+        error:
+          "Server configuration error: Firebase Admin SDK is not initialised. " +
+          "Set FIREBASE_ADMIN_PRIVATE_KEY and FIREBASE_ADMIN_CLIENT_EMAIL in your Vercel environment variables, then redeploy.",
+      },
+      { status: 503 }
+    );
+  }
+
+  const db = getAdminDb();
+  if (!db) {
+    return NextResponse.json({ error: "Firestore Admin connection unavailable." }, { status: 503 });
   }
 
   try {
-    const collections = ["admins", "adminInvitations"];
+    console.log(`[ADMIN DELETE] ADMIN_DELETE_REQUESTED actor=${actor.id} target=${cleanTargetId}`);
+
+    // ── 7. Load target document from admins ────────────────────────────
+    const targetSnap = await db.collection("admins").doc(cleanTargetId).get();
     let targetEmail = "";
+    let targetUid = "";
 
-    // 1. Tier 1: Admin SDK Lookup & Delete
-    if (isAdminCertAvailable()) {
-      try {
-        const db = getAdminDb();
-        if (db) {
-          // Check target data & last Super Admin protection
-          const targetSnap = await db.collection("admins").doc(targetId).get();
-          if (targetSnap.exists) {
-            const data = targetSnap.data();
-            targetEmail = data?.emailNormalized || data?.email || "";
-            if (data?.role === "super_admin") {
-              const superSnap = await db.collection("admins").where("role", "==", "super_admin").where("status", "==", "active").get();
-              if (superSnap.size <= 1) {
-                return NextResponse.json({ error: "The last active Super Admin cannot be removed." }, { status: 409 });
-              }
-            }
-          }
+    if (targetSnap.exists) {
+      const data = targetSnap.data()!;
+      targetEmail = (data.emailNormalized || data.email || "").toLowerCase().trim();
+      targetUid = data.uid || "";
+      console.log(`[ADMIN DELETE] TARGET_ADMIN_FOUND id=${cleanTargetId} email=${targetEmail} status=${data.status}`);
 
-          for (const colName of collections) {
-            await db.collection(colName).doc(targetId).delete().catch(() => {});
-            if (targetEmail) {
-              const matches = await db.collection(colName).where("emailNormalized", "==", targetEmail.toLowerCase()).get();
-              for (const doc of matches.docs) {
-                await doc.ref.delete().catch(() => {});
-              }
-            }
-          }
+      // ── 8. Block last active Super Admin deletion ───────────────────
+      if (data.role === "super_admin") {
+        const superSnap = await db
+          .collection("admins")
+          .where("role", "==", "super_admin")
+          .where("status", "==", "active")
+          .get();
+        const otherSuperAdmins = superSnap.docs.filter((d) => d.id !== cleanTargetId);
+        if (otherSuperAdmins.length === 0) {
+          return NextResponse.json(
+            { error: "Cannot delete the last active Super Admin. Promote another admin to Super Admin first." },
+            { status: 409 }
+          );
         }
-      } catch (err) {
-        console.warn("[INVITE DELETE] Admin SDK notice:", err);
+      }
+
+      // ── 9. Block self-deletion by email (secondary check) ─────────────
+      if (targetEmail && targetEmail === actor.emailNormalized) {
+        return NextResponse.json(
+          { error: "You cannot delete your own Admin account." },
+          { status: 403 }
+        );
+      }
+    } else {
+      // Not found in admins — check adminInvitations
+      console.log(`[ADMIN DELETE] admins/${cleanTargetId} not found, checking adminInvitations...`);
+      const invSnap = await db.collection("adminInvitations").doc(cleanTargetId).get();
+      if (invSnap.exists) {
+        const d = invSnap.data()!;
+        targetEmail = (d.emailNormalized || d.email || "").toLowerCase().trim();
+        targetUid = d.uid || "";
+        console.log(`[ADMIN DELETE] TARGET_FOUND_IN_INVITATIONS id=${cleanTargetId} email=${targetEmail}`);
+      } else {
+        console.warn(`[ADMIN DELETE] Target ${cleanTargetId} not found in admins or adminInvitations. Proceeding with best-effort delete.`);
       }
     }
 
-    // 2. Tier 2: Client Web SDK Hard Delete
-    try {
-      for (const colName of collections) {
-        await clientDeleteDoc(clientDoc(clientDb, colName, targetId)).catch(() => {});
+    // ── 10. Delete from admins collection ─────────────────────────────
+    // Delete by direct document ID
+    await db.collection("admins").doc(cleanTargetId).delete()
+      .then(() => console.log(`[ADMIN DELETE] ADMIN_DOCUMENT_DELETED admins/${cleanTargetId}`))
+      .catch((e) => console.warn(`[ADMIN DELETE] Could not delete admins/${cleanTargetId}:`, e));
+
+    // Delete any other admins records sharing the same normalised email
+    if (targetEmail) {
+      const emailAdminSnap = await db
+        .collection("admins")
+        .where("emailNormalized", "==", targetEmail)
+        .get();
+      await Promise.all(
+        emailAdminSnap.docs.map((d) =>
+          d.ref.delete()
+            .then(() => console.log(`[ADMIN DELETE] EMAIL_RECORD_DELETED admins/${d.id}`))
+            .catch(() => {})
+        )
+      );
+
+      // Also delete UID-keyed document if one exists
+      if (targetUid && targetUid !== cleanTargetId) {
+        const uidDoc = await db.collection("admins").doc(targetUid).get();
+        if (uidDoc.exists) {
+          await uidDoc.ref.delete()
+            .then(() => console.log(`[ADMIN DELETE] UID_KEYED_DELETED admins/${targetUid}`))
+            .catch(() => {});
+        }
       }
-    } catch (clientErr) {
-      console.warn("[INVITE DELETE] Client SDK notice:", clientErr);
     }
 
-    // 3. Tier 3: Direct Firestore REST API Hard Delete (Fail-Safe)
-    const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || "awenue-global";
-    const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+    // ── 11. Delete from adminInvitations collection ─────────────────────
+    await db.collection("adminInvitations").doc(cleanTargetId).delete().catch(() => {});
 
-    if (apiKey) {
-      for (const colName of collections) {
-        const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${colName}/${targetId}?key=${apiKey}`;
-        await fetch(url, { method: "DELETE" }).catch(() => {});
-      }
+    if (targetEmail) {
+      const invMatches = await db
+        .collection("adminInvitations")
+        .where("emailNormalized", "==", targetEmail)
+        .get();
+      await Promise.all(
+        invMatches.docs.map((d) =>
+          d.ref.delete()
+            .then(() => console.log(`[ADMIN DELETE] INVITATION_DELETED adminInvitations/${d.id}`))
+            .catch(() => {})
+        )
+      );
+      console.log(`[ADMIN DELETE] RELATED_INVITATIONS_CLEANED email=${targetEmail}`);
     }
 
+    // ── 12. Write audit log ───────────────────────────────────────
     await logAdminActivity({
       actorAdminId: actor.id,
+      targetAdminId: cleanTargetId,
       action: "ADMIN_PERMANENTLY_DELETED",
-      metadata: { deletedTargetId: targetId, email: targetEmail },
+      metadata: {
+        deletedTargetId: cleanTargetId,
+        email: targetEmail,
+        uid: targetUid,
+        deletedBy: actor.email,
+        deletedAt: new Date().toISOString(),
+      },
     }).catch(() => {});
+
+    console.log(`[ADMIN DELETE] ADMIN_DELETE_COMPLETED target=${cleanTargetId} email=${targetEmail}`);
 
     return NextResponse.json(
       { success: true, message: "Admin permanently deleted from database." },
       { status: 200 }
     );
   } catch (err) {
-    console.error("[INVITE DELETE] Error:", err);
-    return NextResponse.json({ error: "Failed to delete admin from database." }, { status: 500 });
+    console.error("[ADMIN DELETE] Unexpected error:", err);
+    return NextResponse.json(
+      { error: "Failed to delete admin from database. Check server logs for details." },
+      { status: 500 }
+    );
   }
 }
