@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import InviteAdminModal from "@/components/admin/InviteAdminModal";
+import { AdminDetailsModal, type AdminDetailRecord } from "@/components/admin/AdminDetailsModal";
+import { DeleteAdminModal } from "@/components/admin/DeleteAdminModal";
 import { ALL_GRANULAR_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS, AdminRole } from "@/lib/rbac";
 import {
   Users,
@@ -19,30 +21,25 @@ import {
   Edit3,
   CheckSquare,
   Square,
+  Eye,
+  Trash2,
+  Send,
+  Ban,
+  RotateCcw,
 } from "lucide-react";
 
 interface AdminRecord {
   id: string;
+  uid?: string | null;
   email: string;
   displayName: string;
   role: string;
   permissions?: string[];
   status: string;
-  invitedBy?: string;
-  invitedAt?: string;
-  lastLoginAt?: string;
-  activatedAt?: string;
-}
-
-interface PendingInvitation {
-  id: string;
-  email: string;
-  displayName: string;
-  role: string;
-  permissions?: string[];
-  status: string;
-  invitedBy?: string;
-  createdAt?: string;
+  invitedBy?: string | null;
+  invitedAt?: string | null;
+  lastLoginAt?: string | null;
+  activatedAt?: string | null;
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -92,12 +89,16 @@ export default function AdminManagementPage() {
   const isSuperAdmin = admin?.role === "super_admin";
 
   const [admins, setAdmins] = useState<AdminRecord[]>([]);
-  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Invite modal
+  // Filter Tabs: 'all' | 'active' | 'pending' | 'suspended'
+  const [activeTab, setActiveTab] = useState<"all" | "active" | "pending" | "suspended">("all");
+
+  // Modals state
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [viewingAdmin, setViewingAdmin] = useState<AdminDetailRecord | null>(null);
+  const [deletingAdmin, setDeletingAdmin] = useState<AdminDetailRecord | null>(null);
 
   // Edit Permissions Modal
   const [editingAdmin, setEditingAdmin] = useState<AdminRecord | null>(null);
@@ -116,7 +117,6 @@ export default function AdminManagementPage() {
       }
       const data = await res.json();
       setAdmins(data.admins || []);
-      setPendingInvitations(data.pendingInvitations || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data.");
     } finally {
@@ -126,35 +126,25 @@ export default function AdminManagementPage() {
 
   useEffect(() => {
     let mounted = true;
-    const loadData = async () => {
+    const loadAdmins = async () => {
+      setLoading(true);
+      setError(null);
       try {
         const res = await fetch("/api/admin/invite", { credentials: "include" });
-        if (!mounted) return;
         if (!res.ok) {
           const d = await res.json().catch(() => ({}));
           throw new Error(d.error || "Failed to load admin data.");
         }
         const data = await res.json();
-        if (mounted) {
-          setAdmins(data.admins || []);
-          setPendingInvitations(data.pendingInvitations || []);
-        }
+        if (mounted) setAdmins(data.admins || []);
       } catch (err) {
-        if (mounted) {
-          setError(err instanceof Error ? err.message : "Failed to load data.");
-        }
+        if (mounted) setError(err instanceof Error ? err.message : "Failed to load data.");
       } finally {
-        if (mounted) {
-          setLoading(false);
-        }
+        if (mounted) setLoading(false);
       }
     };
-
-    loadData();
-
-    return () => {
-      mounted = false;
-    };
+    loadAdmins();
+    return () => { mounted = false; };
   }, []);
 
   // Open Edit Permissions Modal
@@ -194,7 +184,7 @@ export default function AdminManagementPage() {
     }
   };
 
-  // Admin action (suspend / reactivate / revoke)
+  // Admin action (suspend / reactivate / resend_email)
   const handleAdminAction = async (targetAdminId: string, action: string, newRole?: string) => {
     try {
       const res = await fetch("/api/admin/invite", {
@@ -211,26 +201,33 @@ export default function AdminManagementPage() {
     }
   };
 
-  // Cancel pending pre-authorization
-  const handleCancelInvitation = async (invitationId: string) => {
-    try {
-      const res = await fetch(`/api/admin/invite?invitationId=${invitationId}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to cancel.");
-      await fetchData();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to cancel.");
-    }
+  // Hard Database Delete Admin
+  const handleConfirmPermanentDelete = async (targetAdminId: string) => {
+    const res = await fetch(`/api/admin/invite?targetAdminId=${targetAdminId}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to delete admin from database.");
+
+    // Update state immediately
+    setAdmins((prev) => prev.filter((a) => a.id !== targetAdminId));
+    await fetchData();
   };
 
   // Stats
   const totalAdmins = admins.length;
   const activeAdmins = admins.filter((a) => a.status === "active").length;
+  const pendingAdmins = admins.filter((a) => a.status === "pending").length;
   const suspendedAdmins = admins.filter((a) => a.status === "suspended").length;
-  const pendingCount = admins.filter((a) => a.status === "pending").length + pendingInvitations.length;
+
+  // Filtered List
+  const filteredAdmins = admins.filter((a) => {
+    if (activeTab === "active") return a.status === "active";
+    if (activeTab === "pending") return a.status === "pending";
+    if (activeTab === "suspended") return a.status === "suspended";
+    return true;
+  });
 
   return (
     <div className="space-y-8">
@@ -238,199 +235,256 @@ export default function AdminManagementPage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-black text-white">Admin Management & RBAC Permissions</h1>
-          <p className="text-sm text-text-muted mt-1">
-            Pre-authorize Google emails, assign granular permissions, and manage active administrator accounts.
+          <p className="text-xs text-text-muted mt-1">
+            Pre-authorize Google emails, manage role-based access control, and suspend/delete admins.
           </p>
         </div>
+
         <div className="flex items-center gap-3">
           <button
             onClick={fetchData}
-            className="p-2.5 rounded-xl border border-border-dark text-text-muted hover:text-white hover:bg-surface-raised transition-colors cursor-pointer"
-            title="Refresh list"
+            className="p-2.5 rounded-xl bg-surface-raised border border-white/10 hover:border-white/20 text-text-muted hover:text-white transition-colors cursor-pointer"
+            title="Refresh Data"
           >
-            <RefreshCw size={16} />
+            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
           </button>
+
           {isSuperAdmin && (
             <button
               onClick={() => setShowInviteModal(true)}
-              className="flex items-center gap-2 bg-accent text-surface-base font-extrabold px-5 py-2.5 rounded-xl text-xs hover:bg-accent-hover transition-colors shadow-glow cursor-pointer"
+              className="px-4 py-2.5 bg-accent hover:bg-accent/90 text-surface-base font-bold text-xs rounded-xl shadow-lg shadow-accent/20 transition-all flex items-center gap-2 cursor-pointer"
             >
               <UserPlus size={16} />
-              <span>Pre-Authorize New Admin</span>
+              <span>Invite New Admin</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "Total Admins", value: totalAdmins, icon: Users, color: "text-accent" },
-          { label: "Active Admins", value: activeAdmins, icon: CheckCircle2, color: "text-emerald-400" },
-          { label: "Pending Activation", value: pendingCount, icon: Clock, color: "text-amber-400" },
-          { label: "Suspended", value: suspendedAdmins, icon: XCircle, color: "text-rose-400" },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <div
-            key={label}
-            className="bg-surface-raised border border-border-dark rounded-2xl p-5 flex items-center gap-4 shadow-sm"
-          >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-surface-base ${color}`}>
-              <Icon size={18} />
-            </div>
-            <div>
-              <p className="text-2xl font-black text-white">{value}</p>
-              <p className="text-[11px] text-text-muted font-semibold">{label}</p>
-            </div>
+      {/* Overview Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-surface-raised border border-white/10 p-5 rounded-2xl flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-accent/15 border border-accent/30 text-accent flex items-center justify-center shrink-0">
+            <Users size={22} />
           </div>
-        ))}
+          <div>
+            <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Total Administrators</span>
+            <p className="text-2xl font-black text-white">{totalAdmins}</p>
+          </div>
+        </div>
+
+        <div className="bg-surface-raised border border-emerald-500/20 p-5 rounded-2xl flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0">
+            <CheckCircle2 size={22} />
+          </div>
+          <div>
+            <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Active Admins</span>
+            <p className="text-2xl font-black text-emerald-400">{activeAdmins}</p>
+          </div>
+        </div>
+
+        <div className="bg-surface-raised border border-amber-500/20 p-5 rounded-2xl flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center shrink-0">
+            <Clock size={22} />
+          </div>
+          <div>
+            <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Pending Pre-Auth</span>
+            <p className="text-2xl font-black text-amber-400">{pendingAdmins}</p>
+          </div>
+        </div>
+
+        <div className="bg-surface-raised border border-rose-500/20 p-5 rounded-2xl flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center shrink-0">
+            <XCircle size={22} />
+          </div>
+          <div>
+            <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Suspended</span>
+            <p className="text-2xl font-black text-rose-400">{suspendedAdmins}</p>
+          </div>
+        </div>
       </div>
 
-      {error && (
-        <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-sm flex items-center gap-2">
-          <AlertCircle size={16} />
-          {error}
-        </div>
-      )}
+      {/* Filter Tabs */}
+      <div className="flex items-center gap-2 border-b border-white/10 pb-3">
+        {(["all", "active", "pending", "suspended"] as const).map((tab) => {
+          const count =
+            tab === "all"
+              ? totalAdmins
+              : tab === "active"
+              ? activeAdmins
+              : tab === "pending"
+              ? pendingAdmins
+              : suspendedAdmins;
 
-      {/* Admins Table */}
-      <div className="bg-surface-raised border border-border-dark rounded-2xl overflow-hidden shadow-md">
-        <div className="px-6 py-4 border-b border-border-dark flex items-center justify-between">
-          <h2 className="text-sm font-extrabold text-white flex items-center gap-2">
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer capitalize flex items-center gap-2 ${
+                activeTab === tab
+                  ? "bg-accent/20 text-accent border border-accent/40 shadow-md"
+                  : "bg-surface-raised/40 text-text-muted hover:text-white hover:bg-surface-raised border border-transparent"
+              }`}
+            >
+              <span>{tab === "all" ? "All Accounts" : tab}</span>
+              <span className="px-1.5 py-0.5 rounded-md bg-white/10 text-[10px]">{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Table Section */}
+      <div className="bg-surface-raised border border-white/10 rounded-2xl overflow-hidden shadow-xl">
+        <div className="p-4 border-b border-white/10 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
             <ShieldCheck size={16} className="text-accent" />
-            Administrators & Assigned Permissions
+            <span>Authorized Admin Roster ({filteredAdmins.length})</span>
           </h2>
-          <span className="text-xs text-text-muted font-bold">{totalAdmins} total accounts</span>
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-16 text-text-muted text-xs font-bold">
-            <Loader2 className="animate-spin mr-2" size={18} />
-            Loading admin accounts...
+          <div className="p-12 text-center text-text-muted flex items-center justify-center gap-3">
+            <Loader2 size={20} className="animate-spin text-accent" />
+            <span>Fetching Firestore administrator database...</span>
           </div>
-        ) : admins.length === 0 ? (
-          <div className="py-16 text-center text-text-muted text-xs">No admin accounts found.</div>
+        ) : error ? (
+          <div className="p-8 text-center text-rose-400 flex items-center justify-center gap-2">
+            <AlertCircle size={18} />
+            <span>{error}</span>
+          </div>
+        ) : filteredAdmins.length === 0 ? (
+          <div className="p-12 text-center text-text-muted">
+            <Users size={32} className="mx-auto mb-2 opacity-30" />
+            <p className="text-xs font-bold">No administrator accounts match the selected tab filter.</p>
+          </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-border-dark bg-surface-base/40">
-                  {["Admin Name", "Authorized Google Email", "Role Preset", "Status", "Permissions Summary", "Invited By", "Last Activity", "Actions"].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left font-extrabold text-text-muted/70 uppercase tracking-wider text-[10px]">
-                      {h}
-                    </th>
-                  ))}
+                <tr className="bg-surface-base/60 text-text-muted text-[10px] font-bold uppercase tracking-wider border-b border-white/10">
+                  <th className="px-4 py-3">Administrator</th>
+                  <th className="px-4 py-3">Role</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Permissions Summary</th>
+                  <th className="px-4 py-3">Invited By</th>
+                  <th className="px-4 py-3">Last Login</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border-dark/50">
-                {admins.map((a) => {
-                  const isCurrentAdmin = a.id === admin?.adminId;
-                  const isSuperAdminTarget = a.role === "super_admin";
-                  const canModify = isSuperAdmin && !isCurrentAdmin;
-                  const permsCount = Array.isArray(a.permissions) ? a.permissions.length : 0;
+              <tbody className="divide-y divide-white/5 font-medium">
+                {filteredAdmins.map((a) => {
+                  const isSuperAdminTarget = a.role === "super_admin" || a.id === "super_admin_permanent";
+                  const currentAdminId = admin?.adminId;
+                  const canModify = isSuperAdmin && !isSuperAdminTarget && a.id !== currentAdminId;
+                  const permsCount = isSuperAdminTarget
+                    ? ALL_GRANULAR_PERMISSIONS.length
+                    : Array.isArray(a.permissions) && a.permissions.length > 0
+                    ? a.permissions.length
+                    : (DEFAULT_ROLE_PERMISSIONS[a.role as AdminRole] || []).length;
 
                   return (
-                    <tr key={a.id} className={`hover:bg-surface-base/30 transition-colors ${isCurrentAdmin ? "bg-accent/5" : ""}`}>
+                    <tr key={a.id} className="hover:bg-white/[0.02] transition-colors">
                       <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-accent/20 flex items-center justify-center text-accent font-black text-xs shrink-0">
-                            {a.displayName.charAt(0).toUpperCase()}
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-accent/10 border border-accent/30 text-accent font-bold flex items-center justify-center text-xs shrink-0">
+                            {a.displayName ? a.displayName.charAt(0).toUpperCase() : "A"}
                           </div>
                           <div>
-                            <span className="text-white font-bold block">{a.displayName}</span>
-                            {isCurrentAdmin && (
-                              <span className="text-[9px] text-accent font-bold block">(You)</span>
-                            )}
-                            {isSuperAdminTarget && (
-                              <span className="text-[9px] text-violet-400 font-bold flex items-center gap-0.5">
-                                <Crown size={10} /> Super Admin
-                              </span>
-                            )}
+                            <div className="font-bold text-white flex items-center gap-1.5">
+                              <span>{a.displayName}</span>
+                              {isSuperAdminTarget && <Crown size={12} className="text-amber-400" />}
+                            </div>
+                            <div className="text-[10px] text-text-muted font-mono">{a.email}</div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3.5 text-text-muted font-mono">{a.email}</td>
+
                       <td className="px-4 py-3.5">
-                        <Badge
-                          label={ROLE_LABELS[a.role] || a.role}
-                          colorClass={ROLE_COLORS[a.role] || ROLE_COLORS.admin}
-                        />
+                        <Badge label={ROLE_LABELS[a.role] || a.role} colorClass={ROLE_COLORS[a.role] || ROLE_COLORS.admin} />
                       </td>
+
                       <td className="px-4 py-3.5">
                         <Badge
                           label={a.status.charAt(0).toUpperCase() + a.status.slice(1)}
                           colorClass={STATUS_COLORS[a.status] || STATUS_COLORS.active}
                         />
                       </td>
-                      <td className="px-4 py-3.5 text-text-muted">
-                        <span className="text-[11px] font-bold text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded">
-                          {isSuperAdminTarget ? "All Permissions (100%)" : `${permsCount} Modules Granted`}
+
+                      <td className="px-4 py-3.5">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-surface-base border border-white/10 text-white font-mono">
+                          {isSuperAdminTarget ? "All (30+ Root)" : `${permsCount} Module Perms`}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-text-muted">{a.invitedBy || "—"}</td>
+
+                      <td className="px-4 py-3.5 text-text-muted">{a.invitedBy || "System Bootstrap"}</td>
+
                       <td className="px-4 py-3.5 text-text-muted font-mono">{formatDate(a.lastLoginAt || a.activatedAt)}</td>
-                      <td className="px-4 py-3.5">
-                        {canModify ? (
-                          <div className="flex items-center gap-1.5 flex-wrap">
+
+                      <td className="px-4 py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* View Details Button */}
+                          <button
+                            onClick={() => setViewingAdmin(a as AdminDetailRecord)}
+                            className="p-1.5 text-text-muted hover:text-white rounded-lg border border-white/10 hover:bg-white/10 transition-colors cursor-pointer"
+                            title="View Complete Admin Details"
+                          >
+                            <Eye size={13} />
+                          </button>
+
+                          {/* Edit Permissions Button */}
+                          {canModify && (
                             <button
                               onClick={() => openEditPermissions(a)}
-                              className="text-[10px] font-bold text-accent hover:text-white px-2 py-1 rounded-lg border border-accent/30 hover:bg-accent/20 transition-colors flex items-center gap-1 cursor-pointer"
-                              title="Edit Granular Permissions"
+                              className="p-1.5 text-accent hover:text-white rounded-lg border border-accent/30 hover:bg-accent/20 transition-colors cursor-pointer"
+                              title="Edit Granular RBAC Permissions"
                             >
-                              <Edit3 size={11} />
-                              <span>Permissions</span>
+                              <Edit3 size={13} />
                             </button>
+                          )}
 
-                            {a.status === "pending" && (
-                              <>
-                                <button
-                                  onClick={() => handleAdminAction(a.id, "resend_email")}
-                                  className="text-[10px] font-bold text-sky-400 hover:text-sky-300 px-2 py-1 rounded-lg border border-sky-500/20 hover:border-sky-500/40 transition-colors cursor-pointer"
-                                >
-                                  Resend Email
-                                </button>
-                                <button
-                                  onClick={() => handleCancelInvitation(a.id)}
-                                  className="text-[10px] font-bold text-rose-400 hover:text-rose-300 px-2 py-1 rounded-lg border border-rose-500/20 hover:border-rose-500/40 transition-colors cursor-pointer"
-                                >
-                                  Cancel
-                                </button>
-                              </>
-                            )}
+                          {/* Resend Email for Pending */}
+                          {canModify && a.status === "pending" && (
+                            <button
+                              onClick={() => handleAdminAction(a.id, "resend_email")}
+                              className="p-1.5 text-sky-400 hover:text-sky-300 rounded-lg border border-sky-500/30 hover:bg-sky-500/20 transition-colors cursor-pointer"
+                              title="Resend Invitation Email"
+                            >
+                              <Send size={13} />
+                            </button>
+                          )}
 
-                            {a.status === "active" && !isSuperAdminTarget && (
-                              <button
-                                onClick={() => handleAdminAction(a.id, "suspend")}
-                                className="text-[10px] font-bold text-amber-400 hover:text-amber-300 px-2 py-1 rounded-lg border border-amber-500/20 hover:border-amber-500/40 transition-colors cursor-pointer"
-                              >
-                                Suspend
-                              </button>
-                            )}
+                          {/* Suspend / Reactivate */}
+                          {canModify && a.status === "active" && (
+                            <button
+                              onClick={() => handleAdminAction(a.id, "suspend")}
+                              className="p-1.5 text-amber-400 hover:text-amber-300 rounded-lg border border-amber-500/30 hover:bg-amber-500/20 transition-colors cursor-pointer"
+                              title="Suspend Admin Access"
+                            >
+                              <Ban size={13} />
+                            </button>
+                          )}
 
-                            {a.status === "suspended" && (
-                              <button
-                                onClick={() => handleAdminAction(a.id, "reactivate")}
-                                className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 px-2 py-1 rounded-lg border border-emerald-500/20 hover:border-emerald-500/40 transition-colors cursor-pointer"
-                              >
-                                Reactivate
-                              </button>
-                            )}
+                          {canModify && a.status === "suspended" && (
+                            <button
+                              onClick={() => handleAdminAction(a.id, "reactivate")}
+                              className="p-1.5 text-emerald-400 hover:text-emerald-300 rounded-lg border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors cursor-pointer"
+                              title="Reactivate Admin Access"
+                            >
+                              <RotateCcw size={13} />
+                            </button>
+                          )}
 
-                            {a.status !== "revoked" && !isSuperAdminTarget && (
-                              <button
-                                onClick={() => {
-                                  if (confirm(`Revoke access for ${a.displayName}?`)) {
-                                    handleAdminAction(a.id, "revoke");
-                                  }
-                                }}
-                                className="text-[10px] font-bold text-rose-400 hover:text-rose-300 px-2 py-1 rounded-lg border border-rose-500/20 hover:border-rose-500/40 transition-colors cursor-pointer"
-                              >
-                                Revoke
-                              </button>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-text-muted/40">—</span>
-                        )}
+                          {/* Hard Delete Button */}
+                          {canModify && (
+                            <button
+                              onClick={() => setDeletingAdmin(a as AdminDetailRecord)}
+                              className="p-1.5 text-rose-400 hover:text-rose-300 rounded-lg border border-rose-500/30 hover:bg-rose-500/20 transition-colors cursor-pointer"
+                              title="Permanently Delete Admin from Database"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -448,69 +502,108 @@ export default function AdminManagementPage() {
         onSuccess={fetchData}
       />
 
+      {/* View Admin Details Modal */}
+      <AdminDetailsModal
+        isOpen={!!viewingAdmin}
+        onClose={() => setViewingAdmin(null)}
+        admin={viewingAdmin}
+      />
+
+      {/* Permanent Delete Modal */}
+      <DeleteAdminModal
+        isOpen={!!deletingAdmin}
+        onClose={() => setDeletingAdmin(null)}
+        onConfirmDelete={handleConfirmPermanentDelete}
+        admin={deletingAdmin}
+      />
+
       {/* Edit Permissions Modal */}
       {editingAdmin && (
-        <div className="fixed inset-0 z-50 bg-surface-base/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-surface-raised border border-border-dark p-6 sm:p-8 rounded-3xl max-w-xl w-full shadow-2xl relative max-h-[90vh] flex flex-col">
-            <button
-              onClick={() => setEditingAdmin(null)}
-              className="absolute top-5 right-5 text-text-muted hover:text-white p-1"
-            >
-              <X size={20} />
-            </button>
-
-            <div className="mb-4">
-              <h3 className="text-lg font-black text-white">Edit Permissions: {editingAdmin.displayName}</h3>
-              <p className="text-xs text-text-muted mt-0.5">{editingAdmin.email}</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-surface-base/80 backdrop-blur-md animate-fadeIn">
+          <div className="bg-surface-raised border border-border-dark w-full max-w-2xl rounded-3xl p-6 sm:p-8 shadow-2xl relative text-left max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between pb-4 border-b border-white/10 shrink-0">
+              <div>
+                <h2 className="text-xl font-black text-white">Edit RBAC Permissions</h2>
+                <p className="text-xs text-text-muted font-mono">{editingAdmin.displayName} ({editingAdmin.email})</p>
+              </div>
+              <button onClick={() => setEditingAdmin(null)} className="p-2 rounded-xl text-text-muted hover:text-white cursor-pointer">
+                <X size={20} />
+              </button>
             </div>
 
-            <div className="space-y-4 overflow-y-auto pr-1 flex-1">
-              <div className="bg-surface-base border border-white/10 rounded-2xl p-4 space-y-3">
-                {ALL_GRANULAR_PERMISSIONS.map((perm) => {
-                  const isChecked = editPermissionsList.includes(perm.id);
-                  return (
-                    <button
-                      key={perm.id}
-                      type="button"
-                      onClick={() => {
-                        setEditPermissionsList((prev) =>
-                          prev.includes(perm.id) ? prev.filter((p) => p !== perm.id) : [...prev, perm.id]
-                        );
-                      }}
-                      className={`w-full flex items-center gap-3 p-2.5 rounded-xl border text-left transition-colors cursor-pointer ${
-                        isChecked
-                          ? "bg-accent/10 border-accent/40 text-white"
-                          : "bg-surface-raised/40 border-white/5 text-text-muted hover:border-white/20"
-                      }`}
-                    >
-                      {isChecked ? (
-                        <CheckSquare size={16} className="text-accent shrink-0" />
-                      ) : (
-                        <Square size={16} className="text-text-muted/60 shrink-0" />
-                      )}
-                      <div>
-                        <span className="text-xs font-bold block text-white">{perm.label}</span>
-                        <span className="text-[10px] text-text-muted">{perm.group}</span>
+            <div className="py-6 space-y-6 overflow-y-auto pr-1">
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-text-muted uppercase">Admin Role</label>
+                <select
+                  value={editRole}
+                  onChange={(e) => {
+                    const r = e.target.value;
+                    setEditRole(r);
+                    setEditPermissionsList([...(DEFAULT_ROLE_PERMISSIONS[r as AdminRole] || [])]);
+                  }}
+                  className="w-full bg-surface-base border border-white/10 rounded-xl p-3 text-xs text-white outline-none focus:border-accent"
+                >
+                  <option value="admin">Admin</option>
+                  <option value="content_admin">Content Admin</option>
+                  <option value="support_admin">Support Admin</option>
+                  {isSuperAdmin && <option value="super_admin">Super Admin</option>}
+                </select>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-text-muted uppercase">Granular Permissions</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (editPermissionsList.length === ALL_GRANULAR_PERMISSIONS.length) {
+                        setEditPermissionsList([]);
+                      } else {
+                        setEditPermissionsList(ALL_GRANULAR_PERMISSIONS.map((p) => p.id));
+                      }
+                    }}
+                    className="text-[11px] font-bold text-accent hover:underline cursor-pointer"
+                  >
+                    {editPermissionsList.length === ALL_GRANULAR_PERMISSIONS.length ? "Deselect All" : "Select All"}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {ALL_GRANULAR_PERMISSIONS.map((perm) => {
+                    const isChecked = editPermissionsList.includes(perm.id);
+                    return (
+                      <div
+                        key={perm.id}
+                        onClick={() => {
+                          if (isChecked) {
+                            setEditPermissionsList(editPermissionsList.filter((k) => k !== perm.id));
+                          } else {
+                            setEditPermissionsList([...editPermissionsList, perm.id]);
+                          }
+                        }}
+                        className={`p-3 rounded-xl border text-xs cursor-pointer transition-all flex items-center justify-between ${
+                          isChecked ? "bg-accent/15 border-accent/40 text-white" : "bg-surface-base border-white/5 text-text-muted"
+                        }`}
+                      >
+                        <div>
+                          <div className="font-bold text-white">{perm.label}</div>
+                          <div className="text-[10px] text-text-muted">{perm.group}</div>
+                        </div>
+                        {isChecked ? <CheckSquare size={16} className="text-accent shrink-0" /> : <Square size={16} className="text-text-muted/40 shrink-0" />}
                       </div>
-                    </button>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
-            <div className="pt-4 flex items-center justify-end gap-3 border-t border-border-dark shrink-0">
-              <button
-                onClick={() => setEditingAdmin(null)}
-                className="px-4 py-2 rounded-xl border border-white/10 text-xs font-bold text-text-muted hover:text-white"
-              >
+            <div className="pt-4 border-t border-white/10 flex justify-end gap-3 shrink-0">
+              <button onClick={() => setEditingAdmin(null)} className="px-4 py-2.5 bg-surface-base text-white text-xs font-bold rounded-xl border border-white/10 cursor-pointer">
                 Cancel
               </button>
-              <button
-                disabled={isUpdatingPerms}
-                onClick={handleSavePermissions}
-                className="px-5 py-2 bg-accent text-surface-base font-extrabold text-xs rounded-xl hover:bg-accent-hover flex items-center gap-2"
-              >
-                {isUpdatingPerms ? <Loader2 size={14} className="animate-spin" /> : "Save Permissions"}
+              <button onClick={handleSavePermissions} disabled={isUpdatingPerms} className="px-5 py-2.5 bg-accent text-surface-base text-xs font-bold rounded-xl flex items-center gap-2 cursor-pointer">
+                {isUpdatingPerms && <Loader2 size={14} className="animate-spin" />}
+                <span>Save Permissions</span>
               </button>
             </div>
           </div>

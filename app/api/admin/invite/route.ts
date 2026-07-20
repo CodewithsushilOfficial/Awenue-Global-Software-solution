@@ -15,7 +15,7 @@ import { saveToFirestoreCollection } from "@/lib/firestore-saver";
 import { sendAdminInvitationEmail } from "@/lib/email-service";
 import { getAbsoluteUrl } from "@/lib/site-url";
 import { db as clientDb } from "@/lib/firebase";
-import { collection as clientCollection, getDocs, query, where, limit, doc as clientDoc, updateDoc as clientUpdateDoc } from "firebase/firestore";
+import { collection as clientCollection, getDocs, query, where, limit, doc as clientDoc, updateDoc as clientUpdateDoc, deleteDoc as clientDeleteDoc } from "firebase/firestore";
 import {
   hasPermission,
   canAssignRole,
@@ -660,7 +660,7 @@ export async function PATCH(request: NextRequest) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DELETE: Cancel / Revoke a pending pre-authorization
+// DELETE: Permanently Delete Admin / Invitation from Firestore Database
 // ─────────────────────────────────────────────────────────────────────────────
 export async function DELETE(request: NextRequest) {
   const actor = await getAdminFromRequest(request);
@@ -668,36 +668,93 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const { searchParams } = new URL(request.url);
-  const invitationId = searchParams.get("invitationId");
+  if (!hasPermission(actor.role, "manage_admins", actor.permissions) && actor.role !== "super_admin") {
+    return NextResponse.json({ error: "Only Super Admins can delete administrators." }, { status: 403 });
+  }
 
-  if (!invitationId) {
-    return NextResponse.json({ error: "invitationId is required." }, { status: 400 });
+  const { searchParams } = new URL(request.url);
+  const targetId =
+    searchParams.get("targetAdminId") ||
+    searchParams.get("adminId") ||
+    searchParams.get("invitationId");
+
+  if (!targetId) {
+    return NextResponse.json({ error: "adminId or invitationId is required." }, { status: 400 });
+  }
+
+  if (targetId === "super_admin_permanent" || targetId === actor.id) {
+    return NextResponse.json({ error: "You cannot delete the primary Super Admin account." }, { status: 400 });
   }
 
   try {
-    const updateData = { status: "revoked", updatedAt: new Date().toISOString() };
+    const collections = ["admins", "adminInvitations"];
+    let targetEmail = "";
+
+    // 1. Tier 1: Admin SDK Lookup & Delete
     if (isAdminCertAvailable()) {
       try {
         const db = getAdminDb();
         if (db) {
-          await db.collection("admins").doc(invitationId).update(updateData).catch(() => {});
-          await db.collection("adminInvitations").doc(invitationId).update(updateData).catch(() => {});
+          // Check target data & last Super Admin protection
+          const targetSnap = await db.collection("admins").doc(targetId).get();
+          if (targetSnap.exists) {
+            const data = targetSnap.data();
+            targetEmail = data?.emailNormalized || data?.email || "";
+            if (data?.role === "super_admin") {
+              const superSnap = await db.collection("admins").where("role", "==", "super_admin").where("status", "==", "active").get();
+              if (superSnap.size <= 1) {
+                return NextResponse.json({ error: "The last active Super Admin cannot be removed." }, { status: 409 });
+              }
+            }
+          }
+
+          for (const colName of collections) {
+            await db.collection(colName).doc(targetId).delete().catch(() => {});
+            if (targetEmail) {
+              const matches = await db.collection(colName).where("emailNormalized", "==", targetEmail.toLowerCase()).get();
+              for (const doc of matches.docs) {
+                await doc.ref.delete().catch(() => {});
+              }
+            }
+          }
         }
       } catch (err) {
         console.warn("[INVITE DELETE] Admin SDK notice:", err);
       }
     }
 
-    await clientUpdateDoc(clientDoc(clientDb, "admins", invitationId), updateData).catch(() => {});
-    await clientUpdateDoc(clientDoc(clientDb, "adminInvitations", invitationId), updateData).catch(() => {});
+    // 2. Tier 2: Client Web SDK Hard Delete
+    try {
+      for (const colName of collections) {
+        await clientDeleteDoc(clientDoc(clientDb, colName, targetId)).catch(() => {});
+      }
+    } catch (clientErr) {
+      console.warn("[INVITE DELETE] Client SDK notice:", clientErr);
+    }
+
+    // 3. Tier 3: Direct Firestore REST API Hard Delete (Fail-Safe)
+    const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || "awenue-global";
+    const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+
+    if (apiKey) {
+      for (const colName of collections) {
+        const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${colName}/${targetId}?key=${apiKey}`;
+        await fetch(url, { method: "DELETE" }).catch(() => {});
+      }
+    }
+
+    await logAdminActivity({
+      actorAdminId: actor.id,
+      action: "ADMIN_PERMANENTLY_DELETED",
+      metadata: { deletedTargetId: targetId, email: targetEmail },
+    }).catch(() => {});
 
     return NextResponse.json(
-      { success: true, message: "Pre-authorization cancelled successfully." },
+      { success: true, message: "Admin permanently deleted from database." },
       { status: 200 }
     );
   } catch (err) {
     console.error("[INVITE DELETE] Error:", err);
-    return NextResponse.json({ error: "Failed to cancel pre-authorization." }, { status: 500 });
+    return NextResponse.json({ error: "Failed to delete admin from database." }, { status: 500 });
   }
 }
