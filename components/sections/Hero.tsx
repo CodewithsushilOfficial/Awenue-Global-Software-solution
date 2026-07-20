@@ -149,11 +149,21 @@ export default function Hero() {
         {heroSlides.map((slide, idx) => {
           const isActive = idx === current;
           return (
-            <div
+            <motion.div
               key={idx}
-              className={`absolute inset-0 overflow-hidden transition-opacity duration-1000 ease-in-out ${
-                isActive ? "opacity-100 z-0" : "opacity-0 -z-10 pointer-events-none"
-              }`}
+              className="absolute inset-0 overflow-hidden"
+              initial={false}
+              animate={{
+                opacity: isActive ? 1 : 0,
+              }}
+              transition={{
+                duration: 1.5,
+                ease: "easeInOut",
+              }}
+              style={{
+                zIndex: isActive ? 10 : 1,
+                pointerEvents: isActive ? "auto" : "none",
+              }}
             >
               <div
                 className="absolute inset-0 w-full h-full"
@@ -179,7 +189,7 @@ export default function Hero() {
                   draggable={false}
                 />
               </div>
-            </div>
+            </motion.div>
           );
         })}
       </div>
