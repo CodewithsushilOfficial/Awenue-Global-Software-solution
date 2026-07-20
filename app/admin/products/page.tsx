@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import ImageUrlField from "@/components/admin/ImageUrlField";
 import {
   collection,
   getDocs,
@@ -37,6 +38,8 @@ interface ProductItem {
   ctaLabel?: string;
   displayOrder: number;
   published: boolean;
+  imageUrl?: string;
+  imageAlt?: string;
 }
 
 export default function AdminProductsPage() {
@@ -202,6 +205,8 @@ export default function AdminProductsPage() {
       ctaLabel: editingProduct.ctaLabel || (editingProduct.productStatus === "live" ? "Visit Website" : "Coming Soon"),
       displayOrder: Number(editingProduct.displayOrder) || 1,
       published: editingProduct.published !== false,
+      imageUrl: editingProduct.imageUrl || null,
+      imageAlt: editingProduct.imageAlt || "",
       updatedAt: new Date().toISOString(),
     };
 
@@ -542,6 +547,17 @@ export default function AdminProductsPage() {
                   className="w-full bg-surface-base border border-white/10 p-3 rounded-xl text-xs text-white outline-none focus:border-accent resize-none font-mono"
                 />
               </div>
+
+              {/* Image URL Field */}
+              <ImageUrlField
+                value={editingProduct.imageUrl || ""}
+                onChange={(url) => setEditingProduct({ ...editingProduct, imageUrl: url })}
+                altValue={editingProduct.imageAlt || ""}
+                onAltChange={(alt) => setEditingProduct({ ...editingProduct, imageAlt: alt })}
+                showAlt
+                label="Product Image URL (Optional)"
+                placeholder="https://example.com/product-screenshot.jpg"
+              />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>

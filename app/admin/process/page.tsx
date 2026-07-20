@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import ImageUrlField from "@/components/admin/ImageUrlField";
 import {
   collection,
   query,
@@ -30,6 +31,7 @@ interface ProcessStep {
   deliverable: string;
   displayOrder: number;
   published: boolean;
+  imageUrl?: string;
 }
 
 const DEFAULT_PROCESS_STEPS: Omit<ProcessStep, "id">[] = [
@@ -114,6 +116,7 @@ export default function AdminProcessPage() {
     deliverable: "",
     displayOrder: 1,
     published: true,
+    imageUrl: "",
   });
 
   const fetchSteps = useCallback(async () => {
@@ -178,6 +181,7 @@ export default function AdminProcessPage() {
       deliverable: step.deliverable,
       displayOrder: step.displayOrder,
       published: step.published,
+      imageUrl: step.imageUrl || "",
     });
     setIsModalOpen(true);
   };
@@ -484,6 +488,14 @@ export default function AdminProcessPage() {
                   className="w-full bg-surface-base border border-white/10 px-3.5 py-2.5 rounded-xl text-white outline-none focus:border-accent"
                 />
               </div>
+
+              {/* Step Image URL */}
+              <ImageUrlField
+                value={formState.imageUrl || ""}
+                onChange={(url) => setFormState({ ...formState, imageUrl: url })}
+                label="Step Illustration / Image URL (Optional)"
+                placeholder="https://example.com/step-illustration.jpg"
+              />
 
               <div className="flex items-center gap-2 pt-2">
                 <input

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Save, Loader2, CheckCircle2, Sparkles } from "lucide-react";
+import ImageUrlField from "@/components/admin/ImageUrlField";
 
 interface ContentState {
   // Hero Section
@@ -15,6 +16,8 @@ interface ContentState {
   heroPrimaryCtaLink: string;
   heroSecondaryCta: string;
   heroSecondaryCtaLink: string;
+  heroImageUrl: string;
+  heroImageAlt: string;
 
   // Why AWENUE Section
   trustEyebrow: string;
@@ -57,6 +60,8 @@ const DEFAULT_CONTENT: ContentState = {
   heroPrimaryCtaLink: "#start-project",
   heroSecondaryCta: "Get Free Consultation",
   heroSecondaryCtaLink: "#free-consultation",
+  heroImageUrl: "",
+  heroImageAlt: "AWENUE Digital Solutions",
 
   trustEyebrow: "WHY AWENUE",
   trustHeading: "Built for Business. Focused on Results.",
@@ -267,6 +272,17 @@ export default function AdminContentPage() {
                 />
               </div>
             </div>
+
+            {/* Hero Image URL */}
+            <ImageUrlField
+              value={content.heroImageUrl || ""}
+              onChange={(url) => setContent({ ...content, heroImageUrl: url })}
+              altValue={content.heroImageAlt || ""}
+              onAltChange={(alt) => setContent({ ...content, heroImageAlt: alt })}
+              showAlt
+              label="Hero Background / Feature Image URL (Optional)"
+              placeholder="https://example.com/hero-image.jpg"
+            />
           </div>
 
           {/* Why AWENUE CMS */}

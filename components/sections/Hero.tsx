@@ -13,7 +13,7 @@ import { db } from "@/lib/firebase";
 const heroSlides = [
   {
     src: "/hero-dev-team.jpg",
-    alt: "AWENUE software and web developer team collaborating in emerald green tech studio",
+    alt: "AWENUE software developer team collaborating in emerald green tech office",
     kenBurns: "ken-zoom-in",
     label: "Software Development",
   },
@@ -24,22 +24,28 @@ const heroSlides = [
     label: "AI Automation",
   },
   {
-    src: "/hero-mobile-green.jpg",
-    alt: "Premium Android and iOS mobile apps showcase with green branded UI",
+    src: "/hero-web-dev-green.jpg",
+    alt: "AWENUE developers working on custom web and app solutions",
     kenBurns: "ken-pan-left",
-    label: "Mobile Apps",
-  },
-  {
-    src: "/hero-growth-green.jpg",
-    alt: "Business growth command center with green KPI analytics dashboards",
-    kenBurns: "ken-zoom-out",
-    label: "Business Growth",
+    label: "Custom Solutions",
   },
   {
     src: "/hero-consultation.jpg",
     alt: "AWENUE professional consultation and digital strategy session",
-    kenBurns: "ken-zoom-in-top",
+    kenBurns: "ken-zoom-out",
     label: "Expert Consultation",
+  },
+  {
+    src: "/images/hero/scene-01-business.jpg",
+    alt: "Visionary entrepreneur in a modern tech office with analytics dashboard",
+    kenBurns: "ken-zoom-in-top",
+    label: "Digital Vision",
+  },
+  {
+    src: "/images/hero/scene-02-webdev.jpg",
+    alt: "Premium website design interface on a MacBook in a dark studio",
+    kenBurns: "ken-zoom-in",
+    label: "Web Development",
   },
 ] as const;
 
@@ -174,7 +180,7 @@ export default function Hero() {
                     sizes="100vw"
                     priority={idx === 0}
                     quality={85}
-                    className="object-cover object-center"
+                    className="object-cover object-right"
                     draggable={false}
                   />
                 </div>

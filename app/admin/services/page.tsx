@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import ImageUrlField from "@/components/admin/ImageUrlField";
 import {
   collection,
   getDocs,
@@ -36,6 +37,8 @@ interface ServiceItem {
   ctaLink: string;
   displayOrder: number;
   published: boolean;
+  imageUrl?: string;
+  imageAlt?: string;
 }
 
 export default function AdminServicesPage() {
@@ -239,6 +242,8 @@ export default function AdminServicesPage() {
       ctaLink: editingService.ctaLink || "#contact",
       displayOrder: Number(editingService.displayOrder) || 1,
       published: editingService.published !== false,
+      imageUrl: editingService.imageUrl || null,
+      imageAlt: editingService.imageAlt || "",
       updatedAt: new Date().toISOString(),
     };
 
@@ -543,6 +548,17 @@ export default function AdminServicesPage() {
                   className="w-full bg-surface-base border border-white/10 p-3 rounded-xl text-xs text-white outline-none focus:border-accent resize-none font-mono"
                 />
               </div>
+
+              {/* Image URL Field */}
+              <ImageUrlField
+                value={editingService.imageUrl || ""}
+                onChange={(url) => setEditingService({ ...editingService, imageUrl: url })}
+                altValue={editingService.imageAlt || ""}
+                onAltChange={(alt) => setEditingService({ ...editingService, imageAlt: alt })}
+                showAlt
+                label="Service Image URL (Optional)"
+                placeholder="https://example.com/web-development.jpg"
+              />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>

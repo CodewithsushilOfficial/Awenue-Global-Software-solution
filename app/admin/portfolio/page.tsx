@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import ImageUrlField from "@/components/admin/ImageUrlField";
 import {
   collection,
   getDocs,
@@ -34,6 +35,7 @@ interface PortfolioProject {
   projectUrl?: string;
   projectType: "AWENUE Product" | "Personal Project" | "Client Project";
   imageUrl?: string;
+  imageAlt?: string;
   displayOrder: number;
   published: boolean;
 }
@@ -200,7 +202,8 @@ export default function AdminPortfolioPage() {
       techTags: parsedTags,
       projectUrl: editingProject.projectUrl || "",
       projectType: editingProject.projectType || "Client Project",
-      imageUrl: editingProject.imageUrl || "/images/hero/scene-02-webdev.jpg",
+      imageUrl: editingProject.imageUrl || null,
+      imageAlt: editingProject.imageAlt || "",
       displayOrder: Number(editingProject.displayOrder) || 1,
       published: editingProject.published !== false,
       updatedAt: new Date().toISOString(),
@@ -543,18 +546,16 @@ export default function AdminPortfolioPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="text-[11px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
-                  Image Asset Path or URL
-                </label>
-                <input
-                  type="text"
-                  value={editingProject.imageUrl || ""}
-                  onChange={(e) => setEditingProject({ ...editingProject, imageUrl: e.target.value })}
-                  placeholder="/images/hero/scene-02-webdev.jpg"
-                  className="w-full bg-surface-base border border-white/10 px-3.5 py-2.5 rounded-xl text-xs text-white outline-none focus:border-accent"
-                />
-              </div>
+              {/* Image URL Field */}
+              <ImageUrlField
+                value={editingProject.imageUrl || ""}
+                onChange={(url) => setEditingProject({ ...editingProject, imageUrl: url })}
+                altValue={editingProject.imageAlt || ""}
+                onAltChange={(alt) => setEditingProject({ ...editingProject, imageAlt: alt })}
+                showAlt
+                label="Project Image URL"
+                placeholder="https://example.com/project-screenshot.jpg"
+              />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>

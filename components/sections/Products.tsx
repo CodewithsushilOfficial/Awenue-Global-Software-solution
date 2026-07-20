@@ -21,6 +21,8 @@ export interface ProductItem {
   ctaLabel?: string;
   displayOrder: number;
   published: boolean;
+  // CMS image fields (imageUrl is canonical; image is legacy fallback)
+  imageUrl?: string;
   image?: string;
   imageAlt?: string;
   accentColor?: string;
@@ -219,16 +221,36 @@ function ProductCard({
       >
         {/* Image Preview Container */}
         <div className="relative w-full h-[220px] sm:h-[230px] overflow-hidden bg-surface-base shrink-0">
-          <Image
-            src={product.image || "/images/services/saas.jpg"}
-            alt={product.imageAlt || product.name}
-            fill
-            sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-            className={`object-cover object-center transition-transform duration-700 ease-out ${
-              hovered && isLive ? "scale-108" : "scale-100"
-            } ${!isLive ? "grayscale opacity-60" : "opacity-95"}`}
-            quality={90}
-          />
+          {/* Use standard img for CMS external imageUrl; fallback to next/image for local static assets */}
+          {(() => {
+            const src = product.imageUrl || product.image || "";
+            const alt = product.imageAlt || product.name;
+            if (src && (src.startsWith("http://") || src.startsWith("https://"))) {
+              return (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={src}
+                  alt={alt}
+                  className={`w-full h-full object-cover object-center transition-transform duration-700 ease-out ${
+                    hovered && isLive ? "scale-108" : "scale-100"
+                  } ${!isLive ? "grayscale opacity-60" : "opacity-95"}`}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
+              );
+            }
+            return (
+              <Image
+                src={src || "/images/services/saas.jpg"}
+                alt={alt}
+                fill
+                sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                className={`object-cover object-center transition-transform duration-700 ease-out ${
+                  hovered && isLive ? "scale-108" : "scale-100"
+                } ${!isLive ? "grayscale opacity-60" : "opacity-95"}`}
+                quality={90}
+              />
+            );
+          })()}
 
           {/* Bottom Vignette Gradient */}
           <div

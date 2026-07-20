@@ -19,6 +19,7 @@ interface PortfolioProject {
   projectUrl?: string;
   projectType: "AWENUE Product" | "Personal Project" | "Client Project";
   imageUrl?: string;
+  imageAlt?: string;
   displayOrder: number;
   published: boolean;
 }
@@ -153,13 +154,33 @@ export default function Portfolio() {
               >
                 {/* Image Preview */}
                 <div className="relative w-full h-48 sm:h-52 bg-surface-base overflow-hidden">
-                  <Image
-                    src={project.imageUrl || "/images/hero/scene-02-webdev.jpg"}
-                    alt={project.name}
-                    fill
-                    className="object-cover object-center group-hover:scale-105 transition-transform duration-500"
-                    sizes="(max-width: 768px) 100vw, 33vw"
-                  />
+                  {(() => {
+                    const src = project.imageUrl || "";
+                    const alt = (project as PortfolioProject & { imageAlt?: string }).imageAlt || project.name;
+                    if (src && (src.startsWith("http://") || src.startsWith("https://"))) {
+                      return (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={src}
+                          alt={alt}
+                          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.src = "/images/hero/scene-02-webdev.jpg";
+                          }}
+                        />
+                      );
+                    }
+                    return (
+                      <Image
+                        src={src || "/images/hero/scene-02-webdev.jpg"}
+                        alt={alt}
+                        fill
+                        className="object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                        sizes="(max-width: 768px) 100vw, 33vw"
+                      />
+                    );
+                  })()}
                   <div className="absolute inset-0 bg-linear-to-t from-surface-raised via-transparent to-transparent opacity-80" />
                   
                   {/* Badge */}
