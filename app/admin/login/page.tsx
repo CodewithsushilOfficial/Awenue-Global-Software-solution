@@ -160,14 +160,35 @@ export default function AdminLoginPage() {
     }
   };
 
-  // OTP Input handlers: Auto-focus, Paste, Backspace navigation
+  // OTP Input handlers: Auto-focus, Paste, Backspace navigation, and Autofill support
   const handleOtpChange = (index: number, value: string) => {
-    const digit = value.replace(/\D/g, "").slice(-1);
+    const digitsOnly = value.replace(/\D/g, "");
+    if (!digitsOnly) {
+      const updated = [...otpDigits];
+      updated[index] = "";
+      setOtpDigits(updated);
+      return;
+    }
+
+    if (digitsOnly.length > 1) {
+      // User pasted or OS auto-filled multiple digits (e.g. "123456")
+      const newDigits = [...otpDigits];
+      const filledDigits = digitsOnly.slice(0, 6 - index);
+      for (let i = 0; i < filledDigits.length; i++) {
+        newDigits[index + i] = filledDigits[i];
+      }
+      setOtpDigits(newDigits);
+      const nextFocus = Math.min(index + filledDigits.length, 5);
+      inputRefs.current[nextFocus]?.focus();
+      return;
+    }
+
+    // Single digit input
     const updated = [...otpDigits];
-    updated[index] = digit;
+    updated[index] = digitsOnly;
     setOtpDigits(updated);
 
-    if (digit && index < 5) {
+    if (digitsOnly && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
   };
@@ -175,8 +196,18 @@ export default function AdminLoginPage() {
   const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Backspace") {
       if (!otpDigits[index] && index > 0) {
+        e.preventDefault();
+        const updated = [...otpDigits];
+        updated[index - 1] = "";
+        setOtpDigits(updated);
         inputRefs.current[index - 1]?.focus();
       }
+    } else if (e.key === "ArrowLeft" && index > 0) {
+      e.preventDefault();
+      inputRefs.current[index - 1]?.focus();
+    } else if (e.key === "ArrowRight" && index < 5) {
+      e.preventDefault();
+      inputRefs.current[index + 1]?.focus();
     }
   };
 
@@ -284,7 +315,7 @@ export default function AdminLoginPage() {
               </label>
 
               {/* 6 Individual Numeric OTP Input Boxes */}
-              <div className="flex items-center justify-center gap-2 sm:gap-2.5 mb-3">
+              <div className="grid grid-cols-6 gap-2 sm:gap-3 my-4 max-w-sm mx-auto">
                 {otpDigits.map((digit, idx) => (
                   <input
                     key={idx}
@@ -292,16 +323,18 @@ export default function AdminLoginPage() {
                     type="text"
                     inputMode="numeric"
                     pattern="[0-9]*"
-                    maxLength={1}
+                    maxLength={idx === 0 ? 6 : 1}
+                    autoComplete={idx === 0 ? "one-time-code" : "off"}
                     suppressHydrationWarning
                     value={digit}
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => handleOtpChange(idx, e.target.value)}
                     onKeyDown={(e) => handleOtpKeyDown(idx, e)}
                     onPaste={handleOtpPaste}
-                    className={`w-11 h-14 sm:w-12 sm:h-14 bg-surface-base border text-center text-xl font-bold font-mono rounded-xl outline-none transition-all ${
+                    className={`w-full aspect-[4/5] sm:aspect-square max-h-14 bg-surface-base border text-center text-xl sm:text-2xl font-bold font-mono rounded-xl sm:rounded-2xl outline-none transition-all duration-200 ${
                       digit
-                        ? "border-accent text-accent shadow-glow"
-                        : "border-white/10 text-white focus:border-accent"
+                        ? "border-accent text-accent shadow-glow bg-accent/5 ring-1 ring-accent/40"
+                        : "border-white/15 text-white focus:border-accent focus:ring-2 focus:ring-accent/40 focus:bg-surface-raised"
                     }`}
                     aria-label={`Digit ${idx + 1}`}
                   />
