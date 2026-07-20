@@ -1,7 +1,6 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
-import { getAnalytics, isSupported, type Analytics } from "firebase/analytics";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyATYJjw7vTC6NMKtoODxzfBewMxgWBE--s",
@@ -14,18 +13,24 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-0N99VCLH7Z",
 };
 
-// Singleton initialization to prevent multiple app instances
+// Singleton initialization to prevent multiple app instances on client & server
 const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
 const db: Firestore = getFirestore(app);
 
-let analytics: Analytics | null = null;
+let analytics: unknown = null;
 if (typeof window !== "undefined") {
-  isSupported().then((supported) => {
-    if (supported) {
-      analytics = getAnalytics(app);
-    }
-  }).catch(() => {});
+  import("firebase/analytics")
+    .then(({ getAnalytics, isSupported }) => {
+      isSupported()
+        .then((supported) => {
+          if (supported) {
+            analytics = getAnalytics(app);
+          }
+        })
+        .catch(() => {});
+    })
+    .catch(() => {});
 }
 
 export { app, auth, db, analytics };
