@@ -209,7 +209,7 @@ export async function authorizeGoogleAdmin(
 
       const role = isValidRole(data.role) ? data.role : "admin";
 
-      // Link UID & activate admin
+      // Link UID & activate admin in both admins and adminInvitations
       await doc.ref
         .update({
           uid: googleUid,
@@ -218,6 +218,17 @@ export async function authorizeGoogleAdmin(
           lastLoginAt: now,
           updatedAt: now,
           displayName: data.displayName || googleName || "Administrator",
+        })
+        .catch(() => {});
+
+      await db
+        .collection("adminInvitations")
+        .doc(doc.id)
+        .update({
+          uid: googleUid,
+          status: "active",
+          activatedAt: data.activatedAt || now,
+          updatedAt: now,
         })
         .catch(() => {});
 

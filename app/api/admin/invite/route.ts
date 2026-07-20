@@ -13,6 +13,7 @@ import { getAdminFromRequest, logAdminActivity } from "@/lib/admin-auth";
 import { getAdminDb, isAdminCertAvailable } from "@/lib/firebase-admin";
 import { saveToFirestoreCollection } from "@/lib/firestore-saver";
 import { sendAdminInvitationEmail } from "@/lib/email-service";
+import { getAbsoluteUrl } from "@/lib/site-url";
 import { db as clientDb } from "@/lib/firebase";
 import { collection as clientCollection, getDocs, query, where, limit, doc as clientDoc, updateDoc as clientUpdateDoc } from "firebase/firestore";
 import {
@@ -103,6 +104,17 @@ export async function GET(request: NextRequest) {
         },
         message: "This admin account is already active! You can proceed to sign in with Google.",
       });
+    }
+
+    // 4. Verify Expiration
+    if (foundDoc.expiresAt) {
+      const expTime = new Date(foundDoc.expiresAt as string).getTime();
+      if (!isNaN(expTime) && expTime <= Date.now()) {
+        return NextResponse.json(
+          { error: "This invitation link has expired (invitations are valid for 72 hours). Please ask a Super Admin to resend your invitation." },
+          { status: 400 }
+        );
+      }
     }
 
     if (foundDoc.status !== "pending") {
@@ -343,8 +355,7 @@ export async function POST(request: NextRequest) {
     await saveToFirestoreCollection("adminInvitations", { ...newAdminRecord, id: adminId }).catch(() => {});
 
     // 4. SMTP SECOND: Attempt invitation email dispatch
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.awenueglobalsoftwaresolutions.in";
-    const invitationUrl = `${baseUrl}/admin/invite/accept?token=${rawToken}`;
+    const invitationUrl = getAbsoluteUrl("/admin/invite/accept", { token: rawToken });
 
     const emailResult = await sendAdminInvitationEmail({
       toEmail: normalizedEmail,
@@ -483,8 +494,7 @@ export async function PATCH(request: NextRequest) {
       const name = (targetData?.displayName as string) || (targetData?.fullName as string) || "Administrator";
       const targetRole = (targetData?.role as AdminRole) || "admin";
 
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.awenueglobalsoftwaresolutions.in";
-      const invitationUrl = `${baseUrl}/admin/invite/accept?token=${rawToken}`;
+      const invitationUrl = getAbsoluteUrl("/admin/invite/accept", { token: rawToken });
 
       const emailResult = await sendAdminInvitationEmail({
         toEmail: emailAddress,
