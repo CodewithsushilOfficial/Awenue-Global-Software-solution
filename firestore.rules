@@ -1,0 +1,74 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function to verify Admin privilege
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.role == 'admin' ||
+        request.auth.token.admin == true ||
+        request.auth.token.email == 'Codewithsushil7236@gmail.com'
+      );
+    }
+
+    // Admins Collection
+    match /admins/{adminId} {
+      allow read, write: if isAdmin() || (request.auth != null && request.auth.uid == adminId);
+    }
+
+    // Public Website Content Collections (Read by all public visitors, Write by authenticated Admins)
+    match /websiteContent/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /services/{serviceId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /portfolio/{portfolioId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /portfolioProjects/{portfolioId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Business Leads & Inquiries (Create by any public user, Read/Manage by Admins)
+    match /projectInquiries/{inquiryId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /consultationRequests/{consultationId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Internal Security Collections (Server-side Firebase Admin SDK access only)
+    match /adminOtpChallenges/{challengeId} {
+      allow read, write: if false;
+    }
+
+    match /adminOtps/{otpId} {
+      allow read, write: if false;
+    }
+
+    match /adminAuditLogs/{logId} {
+      allow read, write: if false;
+    }
+  }
+}

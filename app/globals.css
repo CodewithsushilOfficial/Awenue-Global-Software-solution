@@ -1,26 +1,217 @@
 @import "tailwindcss";
 
+@config "../tailwind.config.ts";
+
+@theme {
+  --color-surface-base: #0A0F0D;
+  --color-surface-raised: #121917;
+  --color-surface-light: #FFFFFF;
+  --color-surface-light-alt: #F5F7F6;
+
+  --color-text-primary: #14212B;
+  --color-text-secondary: #FFFFFF;
+  --color-text-tertiary: #575A7B;
+  --color-text-muted: #A7B0AC;
+
+  --color-accent: #09B850;
+  --color-accent-hover: #078A3D;
+  --color-accent-tint: #0BCF5F;
+
+  --color-border-dark: rgba(255, 255, 255, 0.10);
+  --color-border-light: #E3E7E5;
+
+  --font-primary: var(--font-sans), "Plus Jakarta Sans", "Inter", Arial, sans-serif;
+  --font-sans: var(--font-sans), "Plus Jakarta Sans", "Inter", Arial, sans-serif;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 24px;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 8px 24px rgba(10, 15, 13, 0.08);
+  --shadow-glow: 0 0 40px rgba(9, 184, 80, 0.25);
+
+  --ease-awenue: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #0A0F0D;
+  --foreground: #FFFFFF;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-primary);
+  font-weight: 500;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Centralized Typography Reusable Utilities */
+@utility text-hero-title {
+  font-size: clamp(40px, 5vw, 64px);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+
+@utility text-page-title {
+  font-size: clamp(38px, 4.5vw, 56px);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+@utility text-section-title {
+  font-size: clamp(32px, 4vw, 48px);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+}
+
+@utility text-section-h3 {
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+@utility text-card-title {
+  font-size: clamp(20px, 2.5vw, 22px);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+}
+
+@utility text-h4 {
+  font-size: clamp(18px, 2.2vw, 20px);
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+@utility text-hero-desc {
+  font-size: clamp(16px, 2vw, 18px);
+  font-weight: 400;
+  line-height: 1.7;
+  letter-spacing: -0.01em;
+  max-width: 600px;
+}
+
+@utility text-body-lg {
+  font-size: clamp(16px, 2vw, 18px);
+  font-weight: 450;
+  line-height: 1.7;
+}
+
+@utility text-body-std {
+  font-size: clamp(15px, 1.8vw, 16px);
+  font-weight: 450;
+  line-height: 1.7;
+}
+
+@utility text-body-sm {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+@utility text-eyebrow {
+  font-size: clamp(12px, 1.5vw, 13px);
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+@utility text-nav-link {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+@utility text-btn {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+@utility text-footer-brand {
+  font-size: 24px;
+  font-weight: 800;
+}
+
+@utility text-footer-head {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+@utility text-footer-link {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.6;
+}
+
+@utility text-footer-copy {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* Highly visible focus ring on every interactive element */
+*:focus-visible {
+  outline: 2px solid #0BCF5F !important;
+  outline-offset: 2px !important;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0A0F0D;
+}
+::-webkit-scrollbar-thumb {
+  background: #121917;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #09B850;
+}
+
+/* Hero ambient orb animation */
+@keyframes ambient-drift {
+  0%   { transform: translate(0px, 0px) scale(1); }
+  50%  { transform: translate(-30px, 20px) scale(1.05); }
+  100% { transform: translate(20px, -15px) scale(0.95); }
+}
+
+/* Ken Burns hero slideshow animations */
+@keyframes ken-zoom-in {
+  0%   { transform: scale(1.0) translate(0%, 0%); }
+  100% { transform: scale(1.12) translate(-1%, -1%); }
+}
+@keyframes ken-zoom-out {
+  0%   { transform: scale(1.12) translate(0%, 0%); }
+  100% { transform: scale(1.0) translate(1%, 1%); }
+}
+@keyframes ken-pan-right {
+  0%   { transform: scale(1.08) translate(-3%, 0%); }
+  100% { transform: scale(1.08) translate(1%, -1%); }
+}
+@keyframes ken-pan-left {
+  0%   { transform: scale(1.08) translate(2%, -1%); }
+  100% { transform: scale(1.08) translate(-2%, 0%); }
+}
+@keyframes ken-zoom-in-top {
+  0%   { transform: scale(1.0) translate(0%, 0%); }
+  100% { transform: scale(1.12) translate(-2%, 2%); }
 }
