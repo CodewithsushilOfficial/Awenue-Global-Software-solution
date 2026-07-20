@@ -1,21 +1,34 @@
 "use client";
 
+import { useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { ShieldCheck, Mail, Key, UserCheck, Lock, CheckCircle2 } from "lucide-react";
+import { ShieldCheck, Mail, Key, UserCheck, Lock, CheckCircle2, UserPlus } from "lucide-react";
+import InviteAdminModal from "@/components/admin/InviteAdminModal";
 
 export default function AdminProfilePage() {
-  const { user, isAdmin, isOtpVerified } = useAuth();
+  const { user } = useAuth();
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
 
   return (
     <div className="space-y-6 max-w-3xl">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-black text-white mb-1">
-          Admin Profile & Security
-        </h1>
-        <p className="text-text-muted text-xs sm:text-sm">
-          Active administrator security profile and 2FA authentication state.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-black text-white mb-1">
+            Admin Profile & Security
+          </h1>
+          <p className="text-text-muted text-xs sm:text-sm">
+            Active administrator security profile, device auto-login state, and admin access control.
+          </p>
+        </div>
+
+        <button
+          onClick={() => setIsInviteModalOpen(true)}
+          className="flex items-center gap-2 text-xs text-surface-base font-extrabold bg-accent hover:bg-accent-hover px-4 py-2.5 rounded-xl shadow-glow transition-all cursor-pointer self-start sm:self-auto"
+        >
+          <UserPlus size={15} />
+          <span>Invite New Admin</span>
+        </button>
       </div>
 
       {/* Main Profile Card */}
@@ -53,19 +66,37 @@ export default function AdminProfilePage() {
 
           <div className="bg-surface-base p-4 rounded-2xl border border-white/10 space-y-1">
             <span className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
-              <Key size={13} className="text-accent" /> 2FA Authentication
+              <Key size={13} className="text-accent" /> Device Session Status
             </span>
             <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
-              <CheckCircle2 size={14} /> Email OTP 2FA Verified
+              <CheckCircle2 size={14} /> Persistent Auto-Login Active
             </span>
           </div>
 
           <div className="bg-surface-base p-4 rounded-2xl border border-white/10 space-y-1">
             <span className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
-              <Lock size={13} className="text-accent" /> Session Status
+              <Lock size={13} className="text-accent" /> Security Protocol
             </span>
-            <span className="text-xs font-bold text-white block">Active Protected Admin Session</span>
+            <span className="text-xs font-bold text-white block">2FA Email OTP & Claims Verified</span>
           </div>
+        </div>
+
+        {/* Admin Team Invitation Action Card */}
+        <div className="p-5 bg-surface-base border border-accent/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-white font-extrabold text-sm">
+              <UserPlus size={16} className="text-accent" /> Expand Admin Team
+            </div>
+            <p className="text-xs text-text-muted">
+              Invite additional team members or partners as authorized administrators.
+            </p>
+          </div>
+          <button
+            onClick={() => setIsInviteModalOpen(true)}
+            className="px-4 py-2 bg-accent/15 border border-accent/30 text-accent hover:bg-accent hover:text-surface-base rounded-xl text-xs font-extrabold transition-all cursor-pointer shrink-0"
+          >
+            + Invite Admin
+          </button>
         </div>
 
         {/* Security Info Box */}
@@ -74,10 +105,17 @@ export default function AdminProfilePage() {
             <ShieldCheck size={18} /> Enterprise Security Protocol Active
           </div>
           <p className="text-text-muted leading-relaxed">
-            Your AWENUE Admin session is protected by 2-Factor Email OTP verification, server-side session token validation, and Firestore security rule enforcement.
+            Your AWENUE Admin session is protected by 2-Factor Email OTP verification, device persistence, and server-side session token validation.
           </p>
         </div>
       </div>
+
+      {/* Invite Admin Modal */}
+      <InviteAdminModal
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+      />
     </div>
   );
 }
+

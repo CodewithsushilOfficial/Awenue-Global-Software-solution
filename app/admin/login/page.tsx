@@ -116,8 +116,8 @@ export default function AdminLoginPage() {
         throw new Error(data.error || "Invalid verification code.");
       }
 
-      // Complete login with Custom Token
-      await loginWithCustomToken(data.customToken);
+      // Complete login with Custom Token & persist admin email for device auto-login
+      await loginWithCustomToken(data.customToken, email);
       router.push("/admin/dashboard");
     } catch (err: unknown) {
       console.error("OTP Verification error:", err);

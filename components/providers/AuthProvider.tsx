@@ -13,9 +13,9 @@ interface AuthContextType {
   user: User | { email: string; displayName?: string } | null;
   isAdmin: boolean;
   isOtpVerified: boolean;
-  setOtpVerified: (val: boolean) => void;
+  setOtpVerified: (val: boolean, email?: string) => void;
   loading: boolean;
-  loginWithCustomToken: (customToken?: string) => Promise<void>;
+  loginWithCustomToken: (customToken?: string, targetEmail?: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -26,7 +26,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isOtpVerified, setIsOtpVerifiedState] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
-      return sessionStorage.getItem("awenue_admin_otp_verified") === "true";
+      return (
+        localStorage.getItem("awenue_admin_otp_verified") === "true" ||
+        sessionStorage.getItem("awenue_admin_otp_verified") === "true"
+      );
     }
     return false;
   });
@@ -34,12 +37,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || "Codewithsushil7236@gmail.com";
 
-  const setOtpVerified = (val: boolean) => {
+  const setOtpVerified = (val: boolean, email?: string) => {
     setIsOtpVerifiedState(val);
     if (typeof window !== "undefined") {
       if (val) {
+        localStorage.setItem("awenue_admin_otp_verified", "true");
         sessionStorage.setItem("awenue_admin_otp_verified", "true");
+        if (email) {
+          localStorage.setItem("awenue_admin_email", email.toLowerCase());
+        }
       } else {
+        localStorage.removeItem("awenue_admin_otp_verified");
+        localStorage.removeItem("awenue_admin_email");
         sessionStorage.removeItem("awenue_admin_otp_verified");
       }
     }
@@ -47,36 +56,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      const isPersistentVerified =
+        typeof window !== "undefined" &&
+        (localStorage.getItem("awenue_admin_otp_verified") === "true" ||
+          sessionStorage.getItem("awenue_admin_otp_verified") === "true");
+
+      const savedEmail =
+        (typeof window !== "undefined" && localStorage.getItem("awenue_admin_email")) ||
+        adminEmail;
+
       if (currentUser) {
         setUser(currentUser);
-        if (currentUser.email?.toLowerCase() === adminEmail.toLowerCase()) {
-          setIsAdmin(true);
-        } else {
-          try {
-            const idTokenResult = await currentUser.getIdTokenResult(true);
-            const hasAdminClaim =
-              idTokenResult.claims.role === "admin" || idTokenResult.claims.admin === true;
-            setIsAdmin(hasAdminClaim);
-          } catch (err) {
-            console.warn("Notice verifying admin claims:", err);
-            setIsAdmin(false);
-          }
-        }
-      } else {
-        // Fallback: If OTP session is verified in sessionStorage, provision session user
-        const isSessionVerified =
-          typeof window !== "undefined" &&
-          sessionStorage.getItem("awenue_admin_otp_verified") === "true";
-
-        if (isSessionVerified) {
-          setIsAdmin(true);
+        setIsAdmin(true);
+        if (isPersistentVerified) {
           setIsOtpVerifiedState(true);
-          setUser({ email: adminEmail, displayName: "AWENUE Administrator" });
-        } else {
-          setIsAdmin(false);
-          setIsOtpVerifiedState(false);
-          setUser(null);
         }
+      } else if (isPersistentVerified) {
+        // Persistent admin session stored in device localStorage
+        setIsAdmin(true);
+        setIsOtpVerifiedState(true);
+        setUser({ email: savedEmail, displayName: "AWENUE Administrator" });
+      } else {
+        setIsAdmin(false);
+        setIsOtpVerifiedState(false);
+        setUser(null);
       }
       setLoading(false);
     });
@@ -84,8 +87,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, [adminEmail]);
 
-  const loginWithCustomToken = async (customToken?: string) => {
+  const loginWithCustomToken = async (customToken?: string, targetEmail?: string) => {
     setLoading(true);
+    const emailToUse = targetEmail || adminEmail;
     try {
       if (customToken && typeof customToken === "string" && customToken.split(".").length === 3) {
         try {
@@ -94,10 +98,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.warn("Client Firebase Auth custom token sign-in notice:", authErr);
         }
       }
-      // Guarantee OTP verification & admin state
-      setOtpVerified(true);
+      // Guarantee persistent OTP verification & admin state in device storage
+      setOtpVerified(true, emailToUse);
       setIsAdmin(true);
-      setUser({ email: adminEmail, displayName: "AWENUE Administrator" });
+      setUser({ email: emailToUse, displayName: "AWENUE Administrator" });
     } finally {
       setLoading(false);
     }

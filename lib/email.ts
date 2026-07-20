@@ -340,3 +340,82 @@ ${escapeHtml(data.message)}
   }
 }
 
+export interface AdminInviteEmailData {
+  recipientEmail: string;
+  fullName?: string;
+  role?: string;
+  invitedByName?: string;
+}
+
+export async function sendAdminInviteEmail(
+  data: AdminInviteEmailData
+): Promise<{ success: boolean; error?: string }> {
+  const transporter = createTransporter();
+  const fromEmail =
+    process.env.NOTIFICATION_FROM ||
+    `"AWENUE Admin System" <awenueglobalsoftwaresolutions@gmail.com>`;
+
+  if (!transporter) {
+    console.warn("[Nodemailer] SMTP is not configured. Admin invitation email skipped.");
+    return { success: false, error: "SMTP not configured" };
+  }
+
+  const loginUrl = process.env.NEXT_PUBLIC_APP_URL
+    ? `${process.env.NEXT_PUBLIC_APP_URL}/admin/login`
+    : "https://awenueglobalsoftwaresolutions.in/admin/login";
+
+  try {
+    const subject = `You have been invited as an AWENUE Administrator`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; background-color: #0A0F0D; color: #FFFFFF; padding: 32px; border-radius: 12px; max-width: 550px; margin: 0 auto; border: 1px solid rgba(255,255,255,0.1);">
+        <div style="text-align: center; margin-bottom: 24px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 16px;">
+          <h1 style="color: #FFFFFF; margin: 0; font-size: 24px; font-weight: 900;">AWEN<span style="color: #09B850;">UE</span></h1>
+          <p style="color: #A7B0AC; font-size: 12px; margin-top: 4px;">Avenue Global Software Solutions</p>
+        </div>
+        <h2 style="color: #0BCF5F; font-size: 20px; margin: 0 0 12px 0;">Administrator Invitation</h2>
+        <p style="color: #A7B0AC; font-size: 14px; line-height: 1.6;">
+          Hi ${data.fullName ? `<strong>${escapeHtml(data.fullName)}</strong>` : "there"},
+        </p>
+        <p style="color: #A7B0AC; font-size: 14px; line-height: 1.6;">
+          ${data.invitedByName ? `<strong>${escapeHtml(data.invitedByName)}</strong>` : "An administrator"} has invited you to join the <strong>AWENUE Management Portal</strong> as an <strong>${escapeHtml(data.role || "Administrator")}</strong>.
+        </p>
+        <div style="background-color: #121917; border-left: 4px solid #09B850; border-radius: 8px; padding: 20px; margin: 20px 0; font-size: 14px; color: #E5E7EB;">
+          <p style="margin: 0 0 8px 0;"><strong>Authorized Email:</strong> ${escapeHtml(data.recipientEmail)}</p>
+          <p style="margin: 0;"><strong>System Access Level:</strong> ${escapeHtml(data.role || "Administrator")}</p>
+        </div>
+        <p style="color: #A7B0AC; font-size: 13px; line-height: 1.6;">
+          You can now log in using 2-Factor Email OTP verification:
+        </p>
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="${loginUrl}" style="background-color: #09B850; color: #0A0F0D; text-decoration: none; font-weight: bold; font-size: 14px; padding: 12px 28px; border-radius: 10px; display: inline-block;">
+            Access Admin Portal &rarr;
+          </a>
+        </div>
+        <div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); color: #6B7280; font-size: 12px;">
+          — <strong>AWENUE Admin Team</strong><br/>
+          <span>Avenue Global Software Solutions</span>
+        </div>
+      </div>
+    `;
+
+    const text = `Administrator Invitation\n\nYou have been invited to join the AWENUE Admin Portal.\n\nAuthorized Email: ${data.recipientEmail}\nSystem Access Level: ${data.role || "Administrator"}\n\nSign in at: ${loginUrl}\n\n— AWENUE Admin Team`;
+
+    const info = await transporter.sendMail({
+      from: fromEmail,
+      to: data.recipientEmail,
+      subject,
+      text,
+      html,
+    });
+
+    console.log(`[Nodemailer] Admin invite email sent to ${data.recipientEmail}. MessageID:`, info.messageId);
+
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Email delivery failed";
+    console.error("[Nodemailer] Failed to send admin invite email:", err);
+    return { success: false, error: message };
+  }
+}
+
+
