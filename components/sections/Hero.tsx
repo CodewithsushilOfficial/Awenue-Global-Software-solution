@@ -12,8 +12,8 @@ import { db } from "@/lib/firebase";
 // ─── HERO SLIDE DATA ──────────────────────────────────────────────────────────
 const heroSlides = [
   {
-    src: "/hero-dev-team.png",
-    alt: "AWENUE developer team collaborating on software and website projects",
+    src: "/hero-web-dev-green.png",
+    alt: "AWENUE developer team working with emerald green themed tech studio",
     kenBurns: "ken-zoom-in",
     label: "Software Development",
   },
@@ -24,9 +24,21 @@ const heroSlides = [
     label: "AI Automation",
   },
   {
+    src: "/hero-mobile-green.png",
+    alt: "Premium mobile app development with AWENUE green branded UI",
+    kenBurns: "ken-pan-left",
+    label: "Mobile Apps",
+  },
+  {
+    src: "/hero-growth-green.png",
+    alt: "Business growth analytics dashboard with emerald green KPIs",
+    kenBurns: "ken-zoom-out",
+    label: "Business Growth",
+  },
+  {
     src: "/hero-consultation.png",
     alt: "AWENUE developer consultation and digital strategy session",
-    kenBurns: "ken-zoom-out",
+    kenBurns: "ken-zoom-in-top",
     label: "Expert Consultation",
   },
 ] as const;
