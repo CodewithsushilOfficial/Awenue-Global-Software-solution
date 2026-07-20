@@ -111,9 +111,21 @@ function AcceptInvitationContent() {
             Verifying invitation token...
           </div>
         ) : error ? (
-          <div className="my-6 p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-rose-400 text-xs font-semibold text-left flex items-start gap-2.5">
-            <AlertCircle size={18} className="shrink-0 mt-0.5" />
-            <div className="leading-relaxed">{error}</div>
+          <div className="my-6 space-y-4 text-left">
+            <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-rose-400 text-xs font-semibold flex items-start gap-2.5">
+              <AlertCircle size={18} className="shrink-0 mt-0.5" />
+              <div className="leading-relaxed">{error}</div>
+            </div>
+            <p className="text-xs text-text-muted leading-relaxed">
+              If your Google email was pre-authorized by an administrator, you don&apos;t need an active link. You can sign in directly.
+            </p>
+            <button
+              onClick={() => router.push("/admin/login")}
+              className="w-full bg-accent text-surface-base font-extrabold py-3.5 rounded-xl hover:bg-accent-hover transition-all flex items-center justify-center gap-2 cursor-pointer shadow-glow text-xs"
+            >
+              <span>Go to Admin Login</span>
+              <ArrowRight size={16} />
+            </button>
           </div>
         ) : activationSuccess ? (
           <div className="my-6 p-4 bg-accent/10 border border-accent/30 rounded-2xl text-accent text-xs font-semibold flex items-center justify-center gap-2">

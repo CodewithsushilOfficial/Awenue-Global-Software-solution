@@ -44,11 +44,15 @@ export async function GET(request: NextRequest) {
     const hashed = hashToken(token);
     let foundDoc: Record<string, unknown> | null = null;
 
+    // 1. Search Admin SDK in adminInvitations & admins by tokenHash
     if (isAdminCertAvailable()) {
       try {
         const db = getAdminDb();
         if (db) {
-          const snap = await db.collection("adminInvitations").where("tokenHash", "==", hashed).limit(1).get();
+          let snap = await db.collection("adminInvitations").where("tokenHash", "==", hashed).limit(1).get();
+          if (snap.empty) {
+            snap = await db.collection("admins").where("tokenHash", "==", hashed).limit(1).get();
+          }
           if (!snap.empty) foundDoc = { id: snap.docs[0].id, ...snap.docs[0].data() };
         }
       } catch (err) {
@@ -56,18 +60,49 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // 2. Search Client SDK in adminInvitations & admins by tokenHash
     if (!foundDoc) {
       try {
-        const q = query(clientCollection(clientDb, "adminInvitations"), where("tokenHash", "==", hashed), limit(1));
-        const snap = await getDocs(q);
+        let q = query(clientCollection(clientDb, "adminInvitations"), where("tokenHash", "==", hashed), limit(1));
+        let snap = await getDocs(q);
+        if (snap.empty) {
+          q = query(clientCollection(clientDb, "admins"), where("tokenHash", "==", hashed), limit(1));
+          snap = await getDocs(q);
+        }
         if (!snap.empty) foundDoc = { id: snap.docs[0].id, ...snap.docs[0].data() };
       } catch (clientErr) {
         console.warn("[INVITE GET TOKEN] Client SDK notice:", clientErr);
       }
     }
 
+    // 3. Fallback: Search by ID if token was passed as raw invitation ID
+    if (!foundDoc) {
+      try {
+        const docSnap = await getDocs(query(clientCollection(clientDb, "adminInvitations"), limit(50)));
+        const match = docSnap.docs.find((d) => d.id === token || d.data().tokenHash === hashed);
+        if (match) foundDoc = { id: match.id, ...match.data() };
+      } catch (e) {
+        console.warn("[INVITE GET TOKEN] Fallback id lookup notice:", e);
+      }
+    }
+
     if (!foundDoc) {
       return NextResponse.json({ error: "Invalid or expired invitation token." }, { status: 404 });
+    }
+
+    if (foundDoc.status === "active") {
+      return NextResponse.json({
+        success: true,
+        invitation: {
+          id: foundDoc.id,
+          email: foundDoc.emailNormalized || foundDoc.email,
+          displayName: foundDoc.displayName || foundDoc.fullName,
+          role: foundDoc.role,
+          roleLabel: ROLE_LABELS[(foundDoc.role as AdminRole) || "admin"] || foundDoc.role,
+          status: "active",
+        },
+        message: "This admin account is already active! You can proceed to sign in with Google.",
+      });
     }
 
     if (foundDoc.status !== "pending") {
