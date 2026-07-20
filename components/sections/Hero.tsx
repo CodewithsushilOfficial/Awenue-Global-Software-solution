@@ -2,59 +2,50 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import Image from "next/image";
-
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { useModal } from "@/components/providers/ModalProvider";
-import { ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
+import { ArrowRight, CheckCircle2, Sparkles, Play, Pause } from "lucide-react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 // ─── HERO SLIDE DATA ──────────────────────────────────────────────────────────
 const heroSlides = [
   {
-    src: "/images/hero/scene-01-business.jpg",
-    alt: "Visionary entrepreneur in a modern tech office with analytics dashboard",
+    src: "/hero-dev-team.png",
+    alt: "AWENUE developer team collaborating on software and website projects",
     kenBurns: "ken-zoom-in",
-    label: "Digital Vision",
+    label: "Software Development",
+    tag: "Dev Team",
+    description: "Expert developers building world-class digital products",
   },
   {
-    src: "/images/hero/scene-02-webdev.jpg",
-    alt: "Premium website design interface on a MacBook in a dark studio",
+    src: "/hero-ai-workflow.png",
+    alt: "AI and automation workflow development at AWENUE",
     kenBurns: "ken-pan-right",
-    label: "Web Development",
-  },
-  {
-    src: "/images/hero/scene-03-mobile.jpg",
-    alt: "Three iPhones showing a beautiful dark-mode mobile app",
-    kenBurns: "ken-zoom-out",
-    label: "Mobile Apps",
-  },
-  {
-    src: "/images/hero/scene-04-ai.jpg",
-    alt: "AI automation workflow with glowing connected nodes",
-    kenBurns: "ken-pan-left",
     label: "AI Automation",
+    tag: "AI Workflows",
+    description: "Intelligent automation that scales your business",
   },
   {
-    src: "/images/hero/scene-05-growth.jpg",
-    alt: "Business command center with growth analytics dashboards",
-    kenBurns: "ken-zoom-in-top",
-    label: "Business Growth",
+    src: "/hero-consultation.png",
+    alt: "AWENUE developer consultation and digital strategy session",
+    kenBurns: "ken-zoom-out",
+    label: "Expert Consultation",
+    tag: "Strategy",
+    description: "Tailored digital strategy for sustainable growth",
   },
 ] as const;
 
-// Rotating service phrases (in sync with slides)
 const services = heroSlides.map((s) => s.label);
 
-// Trust indicators
 const trustItems = [
   "Built Around Your Business",
   "End-to-End Solutions",
   "Long-Term Support",
 ];
 
-const SLIDE_DURATION = 6000;    // ms each slide is visible (6s)
-const TRANSITION_DURATION = 1500; // ms crossfade (1.5s smooth)
+const SLIDE_DURATION = 7000;
+const TRANSITION_DURATION = 1200;
 
 export default function Hero() {
   const { openModal } = useModal();
@@ -62,7 +53,10 @@ export default function Hero() {
 
   const [current, setCurrent] = useState(0);
   const [serviceIdx, setServiceIdx] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [progress, setProgress] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [cmsContent, setCmsContent] = useState({
     heroEyebrow: "YOUR DIGITAL GROWTH PARTNER",
@@ -109,28 +103,62 @@ export default function Hero() {
     loadCms();
   }, []);
 
-
-  // Advance slide
   const advance = useCallback(() => {
     setCurrent((i) => (i + 1) % heroSlides.length);
     setServiceIdx((i) => (i + 1) % services.length);
+    setProgress(0);
   }, []);
 
-  // Auto-advance (disabled for reduced motion)
-  useEffect(() => {
+  // Progress bar ticker
+  const startProgress = useCallback(() => {
+    if (progressRef.current) clearInterval(progressRef.current);
+    setProgress(0);
     if (prefersReducedMotion) return;
+    const step = 100 / (SLIDE_DURATION / 50);
+    progressRef.current = setInterval(() => {
+      setProgress((p) => {
+        if (p >= 100) return 100;
+        return p + step;
+      });
+    }, 50);
+  }, [prefersReducedMotion]);
+
+  // Auto-advance
+  useEffect(() => {
+    if (prefersReducedMotion || !isPlaying) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (progressRef.current) clearInterval(progressRef.current);
+      return;
+    }
+    startProgress();
     timerRef.current = setInterval(advance, SLIDE_DURATION);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (progressRef.current) clearInterval(progressRef.current);
     };
-  }, [advance, prefersReducedMotion]);
+  }, [advance, prefersReducedMotion, isPlaying, startProgress]);
 
-  // Entrance animation helper
+  const goToSlide = (idx: number) => {
+    setCurrent(idx);
+    setServiceIdx(idx);
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (!prefersReducedMotion && isPlaying) {
+      startProgress();
+      timerRef.current = setInterval(advance, SLIDE_DURATION);
+    }
+  };
+
+  const togglePlay = () => {
+    setIsPlaying((p) => !p);
+  };
+
   const fadeUp = (delay = 0) => ({
     initial: { opacity: 0, y: 22 },
     animate: { opacity: 1, y: 0 },
     transition: { duration: 0.65, delay, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] },
   });
+
+  const currentSlide = heroSlides[current];
 
   return (
     <section
@@ -138,7 +166,7 @@ export default function Hero() {
       className="relative w-full flex flex-col justify-center overflow-hidden bg-surface-base"
       style={{ minHeight: "max(100svh, 780px)" }}
     >
-      {/* ─── SLIDESHOW BACKGROUND ────────────────────────────────────────── */}
+      {/* ─── SLIDESHOW BACKGROUND ─────────────────────────────────────────── */}
       <div className="absolute inset-0" aria-hidden="true">
         <AnimatePresence>
           {heroSlides.map((slide, idx) =>
@@ -149,10 +177,7 @@ export default function Hero() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{
-                  duration: TRANSITION_DURATION / 1000,
-                  ease: "easeInOut",
-                }}
+                transition={{ duration: TRANSITION_DURATION / 1000, ease: "easeInOut" }}
               >
                 <div
                   className="absolute inset-0 w-full h-full"
@@ -160,9 +185,7 @@ export default function Hero() {
                     prefersReducedMotion
                       ? {}
                       : {
-                          animation: `${slide.kenBurns} ${
-                            (SLIDE_DURATION + TRANSITION_DURATION) / 1000
-                          }s ease-in-out forwards`,
+                          animation: `${slide.kenBurns} ${(SLIDE_DURATION + TRANSITION_DURATION) / 1000}s ease-in-out forwards`,
                           willChange: "transform",
                         }
                   }
@@ -173,7 +196,7 @@ export default function Hero() {
                     fill
                     sizes="100vw"
                     priority={idx === 0}
-                    quality={85}
+                    quality={90}
                     className="object-cover object-center"
                     draggable={false}
                   />
@@ -184,53 +207,69 @@ export default function Hero() {
         </AnimatePresence>
       </div>
 
-      {/* Preload hero images for instant sub-10ms slide transitions */}
+      {/* Preload remaining slides */}
       <div className="hidden" aria-hidden="true">
         {heroSlides.slice(1).map((slide, idx) => (
-          <Image
-            key={idx}
-            src={slide.src}
-            alt=""
-            width={1}
-            height={1}
-            priority
-          />
+          <Image key={idx} src={slide.src} alt="" width={1} height={1} priority />
         ))}
       </div>
 
       {/* ─── OVERLAY SYSTEM ──────────────────────────────────────────────── */}
       <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
-        {/* Global dark tint — reduced so images breathe */}
-        <div className="absolute inset-0 bg-surface-base/40" />
-        {/* Left-to-right gradient — deep dark on left for text, opens up on right */}
+        {/* Dark tint */}
+        <div className="absolute inset-0 bg-surface-base/30" />
+        {/* Left-to-right gradient */}
         <div
           className="absolute inset-0"
           style={{
             background:
-              "linear-gradient(100deg, rgba(10,15,13,0.96) 0%, rgba(10,15,13,0.85) 28%, rgba(10,15,13,0.45) 52%, rgba(10,15,13,0.10) 75%, rgba(10,15,13,0.0) 100%)",
+              "linear-gradient(105deg, rgba(10,15,13,0.97) 0%, rgba(10,15,13,0.88) 30%, rgba(10,15,13,0.50) 55%, rgba(10,15,13,0.08) 78%, rgba(10,15,13,0.0) 100%)",
           }}
         />
-        {/* Top vignette (navbar) */}
+        {/* Top vignette */}
         <div
           className="absolute inset-x-0 top-0 h-44"
-          style={{ background: "linear-gradient(to bottom, rgba(10,15,13,0.7), transparent)" }}
+          style={{ background: "linear-gradient(to bottom, rgba(10,15,13,0.75), transparent)" }}
         />
-        {/* Bottom vignette (scroll indicator) */}
+        {/* Bottom vignette */}
         <div
-          className="absolute inset-x-0 bottom-0 h-36"
-          style={{ background: "linear-gradient(to top, rgba(10,15,13,0.75), transparent)" }}
+          className="absolute inset-x-0 bottom-0 h-40"
+          style={{ background: "linear-gradient(to top, rgba(10,15,13,0.85), transparent)" }}
         />
-        {/* Green ambient glow (center-left) */}
+        {/* Green ambient glow */}
         <div
           className="absolute -bottom-20 -left-20 w-[500px] h-[500px] rounded-full"
-          style={{
-            background: "radial-gradient(circle, rgba(9,184,80,0.07) 0%, transparent 70%)",
-          }}
+          style={{ background: "radial-gradient(circle, rgba(9,184,80,0.07) 0%, transparent 70%)" }}
         />
       </div>
 
-      {/* ─── HERO CONTENT ────────────────────────────────────────────────── */}
-      <div className="relative z-10 max-w-7xl mx-auto px-6 w-full pt-28 pb-24 flex flex-col justify-center" style={{ minHeight: "inherit" }}>
+      {/* ─── SLIDE LABEL BADGE (top-right) ───────────────────────────────── */}
+      <div className="absolute top-24 right-6 lg:right-10 z-10" aria-hidden="true">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={current}
+            initial={{ opacity: 0, x: 20, scale: 0.92 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: -10, scale: 0.96 }}
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            className="flex flex-col items-end gap-1"
+          >
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-accent/20 backdrop-blur-md border border-accent/30 rounded-full text-accent text-[10px] font-bold uppercase tracking-wider shadow-lg shadow-accent/10">
+              <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+              {currentSlide.tag}
+            </span>
+            <p className="text-[11px] text-white/50 font-medium text-right max-w-[180px] leading-tight hidden lg:block">
+              {currentSlide.description}
+            </p>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* ─── HERO CONTENT ─────────────────────────────────────────────────── */}
+      <div
+        className="relative z-10 max-w-7xl mx-auto px-6 w-full pt-28 pb-28 flex flex-col justify-center"
+        style={{ minHeight: "inherit" }}
+      >
         <div className="max-w-[640px]">
 
           {/* Eyebrow */}
@@ -263,7 +302,7 @@ export default function Hero() {
             aria-atomic="true"
           >
             <span className="text-text-muted text-body-sm font-medium shrink-0">We Build</span>
-            <div className="relative h-7 overflow-hidden" style={{ minWidth: "160px" }}>
+            <div className="relative h-7 overflow-hidden" style={{ minWidth: "180px" }}>
               <AnimatePresence mode="wait">
                 <motion.span
                   key={serviceIdx}
@@ -325,30 +364,59 @@ export default function Hero() {
         </div>
       </div>
 
-      {/* ─── SLIDE DOTS (bottom center) ───────────────────────────────────── */}
-      <div
-        className="absolute bottom-10 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2"
-        aria-hidden="true"
-      >
-        {heroSlides.map((_, idx) => (
+      {/* ─── VIDEO-LIKE CONTROLS (bottom bar) ─────────────────────────────── */}
+      <div className="absolute bottom-0 inset-x-0 z-10 px-6 pb-6 lg:px-10">
+        <div className="max-w-7xl mx-auto flex items-center gap-4">
+
+          {/* Play / Pause button */}
           <button
-            key={idx}
-            onClick={() => {
-              setCurrent(idx);
-              setServiceIdx(idx);
-              if (timerRef.current) clearInterval(timerRef.current);
-              if (!prefersReducedMotion) {
-                timerRef.current = setInterval(advance, SLIDE_DURATION);
-              }
-            }}
-            className={`rounded-full transition-all duration-400 cursor-pointer focus-visible:outline-2 focus-visible:outline-accent ${
-              idx === current
-                ? "w-6 h-2 bg-accent shadow-[0_0_8px_rgba(9,184,80,0.6)]"
-                : "w-2 h-2 bg-white/25 hover:bg-white/50"
-            }`}
-            aria-label={`Go to slide ${idx + 1}: ${heroSlides[idx].label}`}
-          />
-        ))}
+            onClick={togglePlay}
+            className="flex-shrink-0 w-9 h-9 rounded-full bg-white/10 backdrop-blur-md border border-white/20 hover:bg-accent/20 hover:border-accent/40 text-white hover:text-accent transition-all duration-200 flex items-center justify-center cursor-pointer"
+            aria-label={isPlaying ? "Pause slideshow" : "Play slideshow"}
+          >
+            {isPlaying
+              ? <Pause size={13} fill="currentColor" />
+              : <Play size={13} fill="currentColor" className="translate-x-[1px]" />
+            }
+          </button>
+
+          {/* Slide thumbnails + progress bars */}
+          <div className="flex-1 flex items-center gap-2">
+            {heroSlides.map((slide, idx) => (
+              <button
+                key={idx}
+                onClick={() => goToSlide(idx)}
+                className="group relative flex-1 flex flex-col gap-1.5 cursor-pointer outline-none"
+                aria-label={`Go to slide ${idx + 1}: ${slide.label}`}
+              >
+                {/* Progress track */}
+                <div className="relative h-[3px] w-full bg-white/15 rounded-full overflow-hidden">
+                  {idx === current ? (
+                    <motion.div
+                      className="absolute inset-y-0 left-0 bg-accent rounded-full"
+                      style={{ width: `${progress}%` }}
+                    />
+                  ) : idx < current ? (
+                    <div className="absolute inset-0 bg-white/40 rounded-full" />
+                  ) : null}
+                </div>
+                {/* Slide label */}
+                <span
+                  className={`text-[10px] font-semibold uppercase tracking-wider transition-colors duration-200 text-left hidden lg:block ${
+                    idx === current ? "text-accent" : "text-white/30 group-hover:text-white/60"
+                  }`}
+                >
+                  {slide.label}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Slide counter */}
+          <div className="flex-shrink-0 text-[11px] text-white/40 font-mono tabular-nums">
+            {String(current + 1).padStart(2, "0")} / {String(heroSlides.length).padStart(2, "0")}
+          </div>
+        </div>
       </div>
 
       {/* ─── SCROLL INDICATOR ─────────────────────────────────────────────── */}
@@ -356,7 +424,7 @@ export default function Hero() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1.4, duration: 0.6 }}
-        className="absolute bottom-10 right-8 z-10 hidden lg:flex flex-col items-center gap-1 text-white/30 pointer-events-none"
+        className="absolute bottom-16 right-8 z-10 hidden lg:flex flex-col items-center gap-1 text-white/30 pointer-events-none"
         aria-hidden="true"
       >
         <span className="text-[9px] font-semibold uppercase tracking-[0.15em] [writing-mode:vertical-rl] rotate-180">
