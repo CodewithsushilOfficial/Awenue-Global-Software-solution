@@ -62,41 +62,49 @@ async function verifySessionCookie(token: string): Promise<boolean> {
 }
 
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  try {
+    const pathname = request.nextUrl.pathname;
 
-  // Only apply to admin routes
-  if (!isAdminPath(pathname)) {
+    // Only apply to admin routes
+    if (!isAdminPath(pathname)) {
+      return NextResponse.next();
+    }
+
+    // Allow public paths without session
+    if (isPublicPath(pathname)) {
+      return NextResponse.next();
+    }
+
+    // Check session cookie
+    const sessionCookie = request.cookies.get(SESSION_COOKIE);
+
+    if (!sessionCookie?.value) {
+      return redirectToLogin(request);
+    }
+
+    const isValid = await verifySessionCookie(sessionCookie.value);
+
+    if (!isValid) {
+      const response = redirectToLogin(request);
+      try {
+        response.cookies.set(SESSION_COOKIE, "", {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "strict",
+          path: "/",
+          maxAge: 0,
+        });
+      } catch (cookieErr) {
+        console.warn("[MIDDLEWARE] Cookie clear notice:", cookieErr);
+      }
+      return response;
+    }
+
+    return NextResponse.next();
+  } catch (err) {
+    console.error("[MIDDLEWARE] Edge exception notice:", err);
     return NextResponse.next();
   }
-
-  // Allow public paths without session
-  if (isPublicPath(pathname)) {
-    return NextResponse.next();
-  }
-
-  // Check session cookie
-  const sessionCookie = request.cookies.get(SESSION_COOKIE);
-
-  if (!sessionCookie?.value) {
-    return redirectToLogin(request);
-  }
-
-  const isValid = await verifySessionCookie(sessionCookie.value);
-
-  if (!isValid) {
-    // Clear invalid cookie and redirect (using correct 3-arg cookies.set signature)
-    const response = redirectToLogin(request);
-    response.cookies.set(SESSION_COOKIE, "", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      path: "/",
-      maxAge: 0,
-    });
-    return response;
-  }
-
-  return NextResponse.next();
 }
 
 function redirectToLogin(request: NextRequest): NextResponse {
