@@ -23,9 +23,9 @@ interface ConsultationEmailData {
 
 function createTransporter() {
   const host = process.env.SMTP_HOST || "smtp.gmail.com";
-  const port = Number(process.env.SMTP_PORT) || 465;
+  const port = Number(process.env.SMTP_PORT) || 587;
   const user = process.env.SMTP_USER || "awenueglobalsoftwaresolutions@gmail.com";
-  const rawPass = process.env.SMTP_PASS || "";
+  const rawPass = process.env.SMTP_PASS || "wrtedakkxxxlvqjd";
 
   const pass = rawPass.replace(/\s+/g, "").trim();
 
@@ -43,13 +43,16 @@ function createTransporter() {
         user: user.trim(),
         pass,
       },
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 8000,
     });
   }
 
   return nodemailer.createTransport({
     host,
     port,
-    secure: process.env.SMTP_SECURE === "true" || port === 465,
+    secure: port === 465,
     auth: {
       user: user.trim(),
       pass,
@@ -57,6 +60,9 @@ function createTransporter() {
     tls: {
       rejectUnauthorized: false,
     },
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 8000,
   });
 }
 
