@@ -1,7 +1,8 @@
 import crypto from "crypto";
 
-export interface MemoryOtpChallenge {
-  adminEmail: string;
+export interface OtpChallenge {
+  adminId: string;
+  emailNormalized: string;
   otpHash: string;
   expiresAt: string;
   attempts: number;
@@ -10,77 +11,115 @@ export interface MemoryOtpChallenge {
   createdAt: string;
 }
 
-// Global in-memory OTP cache singleton anchored to globalThis
+// OTP validity: 5 minutes
+const OTP_TTL_MS = 5 * 60 * 1000;
+// Max verification attempts
+const MAX_ATTEMPTS = 5;
+
+// In-memory store singleton anchored to globalThis
+// (works across Next.js hot reloads in development)
 const globalForOtp = globalThis as unknown as {
-  __awenueOtpStore?: Map<string, MemoryOtpChallenge>;
+  __awenueOtpStore?: Map<string, OtpChallenge>;
 };
 
-export const globalOtpStore =
-  globalForOtp.__awenueOtpStore || new Map<string, MemoryOtpChallenge>();
+export const globalOtpStore: Map<string, OtpChallenge> =
+  globalForOtp.__awenueOtpStore || new Map<string, OtpChallenge>();
 
 if (process.env.NODE_ENV !== "production") {
   globalForOtp.__awenueOtpStore = globalOtpStore;
 }
 
-export async function createOtpChallenge(email: string, rawOtp: string): Promise<MemoryOtpChallenge> {
-  const normalizedEmail = email.trim().toLowerCase();
-  const now = new Date();
-  const nowISO = now.toISOString();
-  const expiresAt = new Date(now.getTime() + 10 * 60 * 1000).toISOString(); // 10 minutes validity
-  const otpHash = crypto.createHash("sha256").update(rawOtp.trim()).digest("hex");
+/** Hash a raw OTP value with SHA-256 */
+export function hashOtp(rawOtp: string): string {
+  return crypto.createHash("sha256").update(rawOtp.trim()).digest("hex");
+}
 
-  const challenge: MemoryOtpChallenge = {
-    adminEmail: normalizedEmail,
-    otpHash,
-    expiresAt,
+/**
+ * Create a new OTP challenge for an admin.
+ * Stores hashed OTP only — never the raw value.
+ */
+export async function createOtpChallenge(
+  adminId: string,
+  emailNormalized: string,
+  rawOtp: string
+): Promise<OtpChallenge> {
+  const now = new Date();
+  const challenge: OtpChallenge = {
+    adminId,
+    emailNormalized,
+    otpHash: hashOtp(rawOtp),
+    expiresAt: new Date(now.getTime() + OTP_TTL_MS).toISOString(),
     attempts: 0,
-    maxAttempts: 5,
+    maxAttempts: MAX_ATTEMPTS,
     used: false,
-    createdAt: nowISO,
+    createdAt: now.toISOString(),
   };
 
-  // 1. Store in Server Memory Map singleton
-  globalOtpStore.set(normalizedEmail, challenge);
+  // Store in memory map
+  globalOtpStore.set(emailNormalized, challenge);
 
-  // 2. Persist to Firestore asynchronously if available
+  // Persist to Firestore asynchronously
   try {
     const { getAdminDb } = await import("@/lib/firebase-admin");
     const db = getAdminDb();
     if (db) {
+      // Invalidate old challenges first
+      const oldSnap = await db
+        .collection("adminOtpChallenges")
+        .where("emailNormalized", "==", emailNormalized)
+        .where("used", "==", false)
+        .get();
+
+      if (!oldSnap.empty) {
+        const batch = db.batch();
+        oldSnap.docs.forEach((doc) => {
+          batch.update(doc.ref, { used: true, invalidatedReason: "SUPERSEDED" });
+        });
+        await batch.commit();
+      }
+
       await db.collection("adminOtpChallenges").add(challenge);
     }
   } catch (err) {
-    console.warn("[OTP STORE] Firestore save skipped (using memory store):", err);
+    console.warn("[OTP STORE] Firestore save skipped (memory store active):", err);
   }
 
   return challenge;
 }
 
-export async function getActiveOtpChallenge(email: string): Promise<MemoryOtpChallenge | null> {
-  const normalizedEmail = email.trim().toLowerCase();
+/**
+ * Get the active (non-expired, non-used) OTP challenge for an email.
+ */
+export async function getActiveOtpChallenge(
+  emailNormalized: string
+): Promise<OtpChallenge | null> {
+  const now = new Date();
 
-  // 1. Check Server Memory Map singleton
-  const memChallenge = globalOtpStore.get(normalizedEmail);
-  if (memChallenge) {
+  // Check memory first
+  const memChallenge = globalOtpStore.get(emailNormalized);
+  if (memChallenge && !memChallenge.used && new Date(memChallenge.expiresAt) > now) {
     return memChallenge;
   }
 
-  // 2. Check Firestore fallback asynchronously if available
+  // Fallback to Firestore
   try {
     const { getAdminDb } = await import("@/lib/firebase-admin");
     const db = getAdminDb();
     if (db) {
       const snap = await db
         .collection("adminOtpChallenges")
-        .where("adminEmail", "==", normalizedEmail)
+        .where("emailNormalized", "==", emailNormalized)
+        .where("used", "==", false)
+        .orderBy("createdAt", "desc")
+        .limit(1)
         .get();
 
       if (!snap.empty) {
-        const docs = snap.docs.map((doc) => doc.data() as MemoryOtpChallenge);
-        docs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        const latest = docs[0];
-        globalOtpStore.set(normalizedEmail, latest);
-        return latest;
+        const data = snap.docs[0].data() as OtpChallenge;
+        if (new Date(data.expiresAt) > now) {
+          globalOtpStore.set(emailNormalized, data);
+          return data;
+        }
       }
     }
   } catch (err) {
@@ -90,68 +129,95 @@ export async function getActiveOtpChallenge(email: string): Promise<MemoryOtpCha
   return null;
 }
 
-export async function updateOtpChallengeState(
-  email: string,
-  updates: Partial<MemoryOtpChallenge>
-): Promise<void> {
-  const normalizedEmail = email.trim().toLowerCase();
+/**
+ * Increment attempt count. Returns updated challenge or null if over limit.
+ */
+export async function incrementOtpAttempt(
+  emailNormalized: string
+): Promise<OtpChallenge | null> {
+  const challenge = await getActiveOtpChallenge(emailNormalized);
+  if (!challenge) return null;
 
-  // 1. Update in Server Memory Map singleton
-  const memChallenge = globalOtpStore.get(normalizedEmail);
-  if (memChallenge) {
-    Object.assign(memChallenge, updates);
-  }
+  challenge.attempts += 1;
 
-  // 2. Update in Firestore asynchronously if available
+  // Update memory
+  globalOtpStore.set(emailNormalized, challenge);
+
+  // Update Firestore
   try {
     const { getAdminDb } = await import("@/lib/firebase-admin");
     const db = getAdminDb();
     if (db) {
       const snap = await db
         .collection("adminOtpChallenges")
-        .where("adminEmail", "==", normalizedEmail)
+        .where("emailNormalized", "==", emailNormalized)
+        .where("used", "==", false)
+        .limit(1)
         .get();
+      if (!snap.empty) {
+        await snap.docs[0].ref.update({ attempts: challenge.attempts });
+      }
+    }
+  } catch (err) {
+    console.warn("[OTP STORE] Firestore attempt update skipped:", err);
+  }
 
+  return challenge;
+}
+
+/**
+ * Mark a challenge as used (consumed after successful verification).
+ */
+export async function markOtpUsed(emailNormalized: string): Promise<void> {
+  const challenge = globalOtpStore.get(emailNormalized);
+  if (challenge) {
+    challenge.used = true;
+  }
+
+  try {
+    const { getAdminDb } = await import("@/lib/firebase-admin");
+    const db = getAdminDb();
+    if (db) {
+      const snap = await db
+        .collection("adminOtpChallenges")
+        .where("emailNormalized", "==", emailNormalized)
+        .where("used", "==", false)
+        .get();
       if (!snap.empty) {
         const batch = db.batch();
         snap.docs.forEach((doc) => {
-          if (!doc.data().used) {
-            batch.update(doc.ref, updates);
-          }
+          batch.update(doc.ref, { used: true });
         });
         await batch.commit();
       }
     }
   } catch (err) {
-    console.warn("[OTP STORE] Firestore state update skipped:", err);
+    console.warn("[OTP STORE] Firestore markOtpUsed skipped:", err);
   }
 }
 
-export async function invalidatePreviousChallenges(email: string): Promise<void> {
-  const normalizedEmail = email.trim().toLowerCase();
-
-  // Clear memory
-  const memChallenge = globalOtpStore.get(normalizedEmail);
-  if (memChallenge) {
-    memChallenge.used = true;
+/**
+ * Invalidate all active challenges for an email (call before issuing a new one).
+ */
+export async function invalidatePreviousChallenges(emailNormalized: string): Promise<void> {
+  const challenge = globalOtpStore.get(emailNormalized);
+  if (challenge) {
+    challenge.used = true;
   }
 
-  // Clear Firestore asynchronously if available
   try {
     const { getAdminDb } = await import("@/lib/firebase-admin");
     const db = getAdminDb();
     if (db) {
       const snap = await db
         .collection("adminOtpChallenges")
-        .where("adminEmail", "==", normalizedEmail)
+        .where("emailNormalized", "==", emailNormalized)
+        .where("used", "==", false)
         .get();
-
       if (!snap.empty) {
         const batch = db.batch();
         snap.docs.forEach((doc) => {
-          if (!doc.data().used) {
-            batch.update(doc.ref, { used: true, invalidatedReason: "SUPERSEDED" });
-          }
+          batch.update(doc.ref, { used: true, invalidatedReason: "SUPERSEDED" });
         });
         await batch.commit();
       }

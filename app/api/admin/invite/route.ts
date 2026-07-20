@@ -1,236 +1,492 @@
+/**
+ * Admin Invite API
+ *
+ * GET  /api/admin/invite — List all admins + pending invitations (requires session)
+ * POST /api/admin/invite — Send a new admin invitation (requires super_admin)
+ * PATCH /api/admin/invite — Manage admin status: change_role / suspend / reactivate / revoke
+ * DELETE /api/admin/invite — Cancel a pending invitation
+ *
+ * Security:
+ * - All operations require a valid server-side session
+ * - Invite/role-change/suspend/revoke require super_admin role
+ * - Lower roles cannot escalate privileges or modify super_admin accounts
+ * - Only hashed invitation tokens are stored
+ * - New admins start as "pending" — NOT "active"
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
+import { getAdminFromRequest, logAdminActivity } from "@/lib/admin-auth";
+import { getAdminDb } from "@/lib/firebase-admin";
 import { sendAdminInviteEmail } from "@/lib/email";
+import {
+  hasPermission,
+  canAssignRole,
+  isValidRole,
+  ROLE_LABELS,
+  PROTECTED_ROLES,
+  type AdminRole,
+} from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// GET: Retrieve list of all authorized admins
-export async function GET() {
+// Invitation validity: 48 hours
+const INVITATION_TTL_MS = 48 * 60 * 60 * 1000;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET: List all admins + pending invitations
+// ─────────────────────────────────────────────────────────────────────────────
+export async function GET(request: NextRequest) {
+  const actor = await getAdminFromRequest(request);
+  if (!actor) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+
+  if (!hasPermission(actor.role, "manage_admins")) {
+    return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
+  }
+
   try {
-    const adminDocs: Array<{
-      id: string;
-      email: string;
-      fullName?: string;
-      role?: string;
-      status: string;
-      createdAt: string;
-      invitedBy?: string;
-    }> = [];
-
-    // Include primary environment admin
-    const defaultAdminEmail = (
-      process.env.ADMIN_EMAIL ||
-      process.env.NEXT_PUBLIC_ADMIN_EMAIL ||
-      "Codewithsushil7236@gmail.com"
-    ).toLowerCase();
-
-    adminDocs.push({
-      id: "super_admin_primary",
-      email: defaultAdminEmail,
-      fullName: "Primary Super Administrator",
-      role: "Super Admin",
-      status: "active",
-      createdAt: new Date(2026, 0, 1).toISOString(),
-      invitedBy: "System Root",
-    });
-
-    try {
-      const db = getAdminDb();
-      if (db) {
-        const snap = await db.collection("admins").get();
-        snap.forEach((doc) => {
-          const data = doc.data();
-          if (data.email && data.email.toLowerCase() !== defaultAdminEmail) {
-            adminDocs.push({
-              id: doc.id,
-              email: data.email,
-              fullName: data.fullName || "Administrator",
-              role: data.role || "Administrator",
-              status: data.status || "active",
-              createdAt: data.createdAt || new Date().toISOString(),
-              invitedBy: data.invitedBy || "Admin",
-            });
-          }
-        });
-      }
-    } catch (dbErr) {
-      console.warn("Firestore fetch admins notice:", dbErr);
+    const db = getAdminDb();
+    if (!db) {
+      return NextResponse.json({ error: "Database unavailable." }, { status: 503 });
     }
 
-    return NextResponse.json({ success: true, admins: adminDocs }, { status: 200 });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to load admins.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    // Fetch all admin records
+    const adminsSnap = await db.collection("admins").get();
+    const admins = adminsSnap.docs.map((doc) => {
+      const d = doc.data();
+      return {
+        id: doc.id,
+        uid: d.uid || null,
+        email: d.email || d.emailNormalized || "",
+        displayName: d.displayName || d.fullName || "Administrator",
+        role: d.role || "admin",
+        status: d.status || "active",
+        invitedBy: d.invitedBy || null,
+        invitedAt: d.invitedAt || d.createdAt || null,
+        activatedAt: d.activatedAt || null,
+        lastLoginAt: d.lastLoginAt || null,
+        createdAt: d.createdAt || null,
+      };
+    });
+
+    // Fetch pending invitations
+    const invitationsSnap = await db
+      .collection("adminInvitations")
+      .where("status", "==", "pending")
+      .get();
+
+    const pendingInvitations = invitationsSnap.docs.map((doc) => {
+      const d = doc.data();
+      return {
+        id: doc.id,
+        email: d.email || d.emailNormalized || "",
+        displayName: d.displayName || "",
+        role: d.role || "admin",
+        status: d.status,
+        invitedBy: d.invitedBy || null,
+        invitedByAdminId: d.invitedByAdminId || null,
+        createdAt: d.createdAt || null,
+        expiresAt: d.expiresAt || null,
+      };
+    });
+
+    return NextResponse.json(
+      { success: true, admins, pendingInvitations },
+      { status: 200 }
+    );
+  } catch (err) {
+    console.error("[INVITE GET] Error:", err);
+    return NextResponse.json({ error: "Failed to load admin data." }, { status: 500 });
   }
 }
 
-// POST: Invite a new Admin
+// ─────────────────────────────────────────────────────────────────────────────
+// POST: Send a new admin invitation
+// ─────────────────────────────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
+  const actor = await getAdminFromRequest(request);
+  if (!actor) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+
+  if (!hasPermission(actor.role, "invite_admins")) {
+    return NextResponse.json(
+      { error: "Only Super Admins can invite new administrators." },
+      { status: 403 }
+    );
+  }
+
+  let body: Record<string, unknown> = {};
   try {
-    let body: any = {};
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON request payload." }, { status: 400 });
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
+  const { email, displayName, role } = body;
+
+  // Validate required fields
+  if (typeof email !== "string" || !email.includes("@")) {
+    return NextResponse.json({ error: "A valid email address is required." }, { status: 400 });
+  }
+  if (typeof displayName !== "string" || !displayName.trim()) {
+    return NextResponse.json({ error: "Full name is required." }, { status: 400 });
+  }
+
+  // Validate role against server-side allowlist
+  const normalizedRole = typeof role === "string" ? role.trim() : "";
+  if (!isValidRole(normalizedRole)) {
+    return NextResponse.json(
+      { error: "Invalid role specified. Allowed: admin, content_admin, support_admin." },
+      { status: 400 }
+    );
+  }
+
+  // Prevent inviting super_admin through this endpoint
+  if (normalizedRole === "super_admin") {
+    return NextResponse.json(
+      { error: "Super Admin accounts cannot be created through the invite system." },
+      { status: 403 }
+    );
+  }
+
+  // Verify actor can assign this role
+  if (!canAssignRole(actor.role, normalizedRole as AdminRole)) {
+    return NextResponse.json(
+      { error: `Your role cannot assign the "${ROLE_LABELS[normalizedRole as AdminRole]}" role.` },
+      { status: 403 }
+    );
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const cleanName = displayName.trim();
+
+  try {
+    const db = getAdminDb();
+    if (!db) {
+      return NextResponse.json({ error: "Database unavailable." }, { status: 503 });
     }
 
-    const { email, fullName, role, invitedBy } = body;
+    // Check for existing active admin
+    const existingAdmin = await db
+      .collection("admins")
+      .where("emailNormalized", "==", normalizedEmail)
+      .limit(1)
+      .get();
 
-    if (!email || typeof email !== "string" || !email.includes("@")) {
+    if (!existingAdmin.empty) {
       return NextResponse.json(
-        { error: "Please provide a valid admin email address." },
-        { status: 400 }
+        { error: "An admin with this email address already exists." },
+        { status: 409 }
       );
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
-    const cleanFullName = fullName ? String(fullName).trim() : "Administrator";
-    const cleanRole = role ? String(role).trim() : "Administrator";
-    const nowISO = new Date().toISOString();
-    const adminDocId = "admin_" + crypto.createHash("md5").update(normalizedEmail).digest("hex").slice(0, 12);
+    // Check for existing pending invitation
+    const existingInvitation = await db
+      .collection("adminInvitations")
+      .where("emailNormalized", "==", normalizedEmail)
+      .where("status", "==", "pending")
+      .limit(1)
+      .get();
 
-    let isAlreadyRegistered = false;
-
-    // Save to Firestore 'admins' collection safely
-    try {
-      const db = getAdminDb();
-      if (db) {
-        const existingSnap = await db
-          .collection("admins")
-          .where("email", "==", normalizedEmail)
-          .limit(1)
-          .get();
-
-        if (!existingSnap.empty) {
-          isAlreadyRegistered = true;
-        } else {
-          await db.collection("admins").doc(adminDocId).set({
-            email: normalizedEmail,
-            fullName: cleanFullName,
-            role: cleanRole,
-            status: "active",
-            createdAt: nowISO,
-            invitedBy: invitedBy || "Super Admin",
-          });
-        }
-      }
-    } catch (dbErr) {
-      console.warn("[ADMIN INVITE] Firestore admin save notice:", dbErr);
-    }
-
-    if (isAlreadyRegistered) {
+    if (!existingInvitation.empty) {
       return NextResponse.json(
-        { error: `An administrator with email ${normalizedEmail} is already registered.` },
-        { status: 400 }
+        {
+          error: "A pending invitation already exists for this email. Use 'Resend Invitation' to send a new link.",
+        },
+        { status: 409 }
       );
     }
 
-    // Set Firebase Auth custom claims if available
-    try {
-      const auth = getAdminAuth();
-      if (auth) {
-        let userUid = adminDocId;
-        try {
-          const userRecord = await auth.getUserByEmail(normalizedEmail);
-          userUid = userRecord.uid;
-        } catch {
-          const newUser = await auth.createUser({
-            email: normalizedEmail,
-            emailVerified: true,
-            displayName: cleanFullName,
-          });
-          userUid = newUser.uid;
-        }
-        await auth.setCustomUserClaims(userUid, { role: "admin", admin: true });
-      }
-    } catch (authErr) {
-      console.warn("[ADMIN INVITE] Firebase Admin Auth setup notice:", authErr);
-    }
+    // Generate cryptographically secure invitation token
+    const rawToken = crypto.randomBytes(48).toString("hex");
+    // Store only the hash
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
 
-    // Send Admin Invitation Email via Nodemailer
-    let emailResult = { success: true };
+    const now = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + INVITATION_TTL_MS).toISOString();
+
+    // Create pending invitation — status is "pending", NOT "active"
+    const invitationRef = await db.collection("adminInvitations").add({
+      emailNormalized: normalizedEmail,
+      email: normalizedEmail,
+      displayName: cleanName,
+      role: normalizedRole,
+      status: "pending",
+      tokenHash,
+      expiresAt,
+      invitedBy: actor.displayName,
+      invitedByAdminId: actor.id,
+      createdAt: now,
+      acceptedAt: null,
+    });
+
+    // Build the accept invitation URL
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "http://localhost:3000";
+    const inviteUrl = `${baseUrl}/admin/invite/accept?token=${rawToken}&invitation=${invitationRef.id}`;
+
+    // Send invitation email via Nodemailer
+    let emailSent = false;
     try {
-      emailResult = await sendAdminInviteEmail({
+      const emailResult = await sendAdminInviteEmail({
         recipientEmail: normalizedEmail,
-        fullName: cleanFullName,
-        role: cleanRole,
-        invitedByName: invitedBy || "Super Administrator",
+        fullName: cleanName,
+        role: ROLE_LABELS[normalizedRole as AdminRole],
+        invitedByName: actor.displayName,
+        inviteUrl,
       });
-    } catch (emailErr) {
-      console.warn("[ADMIN INVITE] Nodemailer error notice:", emailErr);
+      emailSent = emailResult.success;
+      if (!emailResult.success) {
+        console.error("[INVITE POST] Email send failed:", emailResult.error);
+      }
+    } catch (mailErr) {
+      console.error("[INVITE POST] Nodemailer exception:", mailErr);
     }
 
-    // Audit log entry
-    try {
-      const db = getAdminDb();
-      if (db) {
-        await db.collection("adminAuditLogs").add({
-          type: "ADMIN_INVITED",
-          invitedEmail: normalizedEmail,
-          fullName: cleanFullName,
-          role: cleanRole,
-          invitedBy: invitedBy || "Super Admin",
-          createdAt: nowISO,
-        });
-      }
-    } catch (auditErr) {
-      console.warn("[ADMIN INVITE] Audit log failed:", auditErr);
-    }
+    // Audit log
+    await logAdminActivity({
+      actorAdminId: actor.id,
+      action: "ADMIN_INVITED",
+      metadata: {
+        invitedEmail: normalizedEmail,
+        invitedName: cleanName,
+        role: normalizedRole,
+        invitationId: invitationRef.id,
+      },
+    }).catch(() => {});
 
     return NextResponse.json(
       {
         success: true,
-        message: `Admin invitation sent to ${normalizedEmail} successfully!`,
-        emailSent: emailResult.success,
+        message: `Invitation sent to ${normalizedEmail}.`,
+        emailSent,
+        invitationId: invitationRef.id,
       },
-      { status: 200 }
+      { status: 201 }
     );
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to invite admin.";
-    console.error("API /api/admin/invite error:", message);
-    return NextResponse.json({ error: message }, { status: 400 });
+  } catch (err) {
+    console.error("[INVITE POST] Error:", err);
+    return NextResponse.json({ error: "Failed to send invitation." }, { status: 500 });
   }
 }
 
-// DELETE: Revoke Admin Privileges
-export async function DELETE(request: NextRequest) {
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH: Manage admin — change role, suspend, reactivate, revoke
+// ─────────────────────────────────────────────────────────────────────────────
+export async function PATCH(request: NextRequest) {
+  const actor = await getAdminFromRequest(request);
+  if (!actor) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+
+  if (!hasPermission(actor.role, "manage_admins")) {
+    return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
+  }
+
+  let body: Record<string, unknown> = {};
   try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
-    const email = searchParams.get("email");
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
 
-    if (!id && !email) {
-      return NextResponse.json({ error: "Missing admin ID or email parameter." }, { status: 400 });
-    }
+  const { targetAdminId, action, newRole } = body;
 
+  if (typeof targetAdminId !== "string" || !targetAdminId) {
+    return NextResponse.json({ error: "targetAdminId is required." }, { status: 400 });
+  }
+
+  const allowedActions = ["change_role", "suspend", "reactivate", "revoke"];
+  if (typeof action !== "string" || !allowedActions.includes(action)) {
+    return NextResponse.json(
+      { error: `action must be one of: ${allowedActions.join(", ")}` },
+      { status: 400 }
+    );
+  }
+
+  try {
     const db = getAdminDb();
-    let docId = id;
+    if (!db) {
+      return NextResponse.json({ error: "Database unavailable." }, { status: 503 });
+    }
 
-    if (db) {
-      if (!docId && email) {
-        const snap = await db
-          .collection("admins")
-          .where("email", "==", email.toLowerCase().trim())
-          .limit(1)
-          .get();
-        if (!snap.empty) {
-          docId = snap.docs[0].id;
-        }
-      }
+    const targetDoc = await db.collection("admins").doc(targetAdminId).get();
+    if (!targetDoc.exists) {
+      return NextResponse.json({ error: "Admin not found." }, { status: 404 });
+    }
 
-      if (docId) {
-        await db.collection("admins").doc(docId).delete();
+    const targetData = targetDoc.data()!;
+    const targetRole = targetData.role as AdminRole;
+
+    // Prevent modifying self (suspension/revocation)
+    if (targetAdminId === actor.id && (action === "suspend" || action === "revoke")) {
+      return NextResponse.json(
+        { error: "You cannot suspend or revoke your own account." },
+        { status: 403 }
+      );
+    }
+
+    // Protect super_admin accounts from being modified by non-super-admins
+    if (PROTECTED_ROLES.includes(targetRole) && actor.role !== "super_admin") {
+      return NextResponse.json(
+        { error: "Only Super Admins can manage Super Admin accounts." },
+        { status: 403 }
+      );
+    }
+
+    // Guard: prevent removing last active super_admin
+    if (targetRole === "super_admin" && (action === "revoke" || action === "suspend")) {
+      const activeSuperAdmins = await db
+        .collection("admins")
+        .where("role", "==", "super_admin")
+        .where("status", "==", "active")
+        .get();
+
+      if (activeSuperAdmins.size <= 1) {
+        return NextResponse.json(
+          { error: "Cannot remove the last active Super Admin. Promote another admin first." },
+          { status: 403 }
+        );
       }
     }
+
+    const now = new Date().toISOString();
+    let updateData: Record<string, unknown> = { updatedAt: now };
+    let logAction = "";
+
+    switch (action) {
+      case "change_role": {
+        if (!isValidRole(normalizedRoleStr(newRole))) {
+          return NextResponse.json({ error: "Invalid role." }, { status: 400 });
+        }
+        const roleStr = normalizedRoleStr(newRole) as AdminRole;
+        if (roleStr === "super_admin" && actor.role !== "super_admin") {
+          return NextResponse.json(
+            { error: "Only Super Admins can promote others to Super Admin." },
+            { status: 403 }
+          );
+        }
+        updateData.role = roleStr;
+        logAction = "ADMIN_ROLE_CHANGED";
+        break;
+      }
+      case "suspend":
+        updateData.status = "suspended";
+        logAction = "ADMIN_SUSPENDED";
+        break;
+      case "reactivate":
+        updateData.status = "active";
+        logAction = "ADMIN_REACTIVATED";
+        break;
+      case "revoke":
+        updateData.status = "revoked";
+        logAction = "ADMIN_REVOKED";
+        break;
+    }
+
+    await db.collection("admins").doc(targetAdminId).update(updateData);
+
+    // If suspended/revoked, attempt to revoke Firebase Auth refresh tokens
+    if (action === "suspend" || action === "revoke") {
+      try {
+        const { getAdminAuth } = await import("@/lib/firebase-admin");
+        const auth = getAdminAuth();
+        if (auth && targetData.uid) {
+          await auth.revokeRefreshTokens(targetData.uid);
+        }
+      } catch (authErr) {
+        console.warn("[INVITE PATCH] Firebase refresh token revocation:", authErr);
+      }
+    }
+
+    await logAdminActivity({
+      actorAdminId: actor.id,
+      targetAdminId,
+      action: logAction,
+      metadata: {
+        targetEmail: targetData.email || targetData.emailNormalized || "",
+        ...(action === "change_role" && { newRole: normalizedRoleStr(newRole) }),
+      },
+    }).catch(() => {});
 
     return NextResponse.json(
-      { success: true, message: "Admin access revoked successfully." },
+      { success: true, message: "Admin updated successfully." },
       { status: 200 }
     );
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to revoke admin access.";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch (err) {
+    console.error("[INVITE PATCH] Error:", err);
+    return NextResponse.json({ error: "Failed to update admin." }, { status: 500 });
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE: Cancel a pending invitation
+// ─────────────────────────────────────────────────────────────────────────────
+export async function DELETE(request: NextRequest) {
+  const actor = await getAdminFromRequest(request);
+  if (!actor) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+
+  if (!hasPermission(actor.role, "invite_admins")) {
+    return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const invitationId = searchParams.get("invitationId");
+
+  if (!invitationId) {
+    return NextResponse.json({ error: "invitationId is required." }, { status: 400 });
+  }
+
+  try {
+    const db = getAdminDb();
+    if (!db) {
+      return NextResponse.json({ error: "Database unavailable." }, { status: 503 });
+    }
+
+    const invDoc = await db.collection("adminInvitations").doc(invitationId).get();
+    if (!invDoc.exists) {
+      return NextResponse.json({ error: "Invitation not found." }, { status: 404 });
+    }
+
+    const invData = invDoc.data()!;
+    if (invData.status !== "pending") {
+      return NextResponse.json(
+        { error: "Only pending invitations can be cancelled." },
+        { status: 400 }
+      );
+    }
+
+    await invDoc.ref.update({
+      status: "revoked",
+      revokedAt: new Date().toISOString(),
+      revokedByAdminId: actor.id,
+    });
+
+    await logAdminActivity({
+      actorAdminId: actor.id,
+      action: "INVITATION_REVOKED",
+      metadata: { invitationId, email: invData.emailNormalized || invData.email || "" },
+    }).catch(() => {});
+
+    return NextResponse.json(
+      { success: true, message: "Invitation cancelled successfully." },
+      { status: 200 }
+    );
+  } catch (err) {
+    console.error("[INVITE DELETE] Error:", err);
+    return NextResponse.json({ error: "Failed to cancel invitation." }, { status: 500 });
+  }
+}
+
+function normalizedRoleStr(val: unknown): string {
+  return typeof val === "string" ? val.trim() : "";
 }

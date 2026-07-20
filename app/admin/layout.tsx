@@ -22,6 +22,7 @@ import {
   X,
   ShieldCheck,
   Layers,
+  UserCog,
 } from "lucide-react";
 
 interface NavGroup {
@@ -37,21 +38,25 @@ interface NavGroup {
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, isAdmin, isOtpVerified, loading, logout } = useAuth();
+  const { admin, isAdmin, loading, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const isSuperAdmin = admin?.role === "super_admin";
+  const canManageAdmins = admin?.role === "super_admin" || admin?.role === "admin";
 
   useEffect(() => {
     if (pathname === "/admin/login") return;
-    if (!loading && (!user || !isAdmin || !isOtpVerified)) {
+    if (pathname === "/admin/invite/accept") return;
+    if (!loading && !isAdmin) {
       router.replace("/admin/login");
     }
-  }, [loading, user, isAdmin, isOtpVerified, pathname, router]);
+  }, [loading, isAdmin, pathname, router]);
 
-  if (pathname === "/admin/login") {
+  if (pathname === "/admin/login" || pathname.startsWith("/admin/invite/accept")) {
     return <>{children}</>;
   }
 
-  if (loading || !user || !isAdmin || !isOtpVerified) {
+  if (loading || !isAdmin) {
     return (
       <div className="min-h-screen bg-surface-base flex items-center justify-center text-text-muted text-sm font-bold">
         Authenticating admin session & 2FA security...
@@ -94,16 +99,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     {
       label: "CONFIGURATION",
       items: [
-        { name: "Website Settings", href: "/admin/settings", icon: Settings },
+        ...(isSuperAdmin ? [{ name: "Website Settings", href: "/admin/settings", icon: Settings }] : []),
       ],
     },
     {
       label: "ACCOUNT",
       items: [
         { name: "Admin Profile", href: "/admin/profile", icon: UserCheck },
+        ...(canManageAdmins ? [{ name: "Admin Management", href: "/admin/admins", icon: UserCog }] : []),
       ],
     },
-  ];
+  ].filter((group) => group.items.length > 0);
 
   const handleLogout = async () => {
     await logout();
@@ -118,9 +124,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <Link href="/admin/dashboard" className="text-lg font-black tracking-wider text-white">
             AWEN<span className="text-accent">UE</span> CMS
           </Link>
-          <span className="text-[10px] font-extrabold text-accent bg-accent/10 border border-accent/30 px-2 py-0.5 rounded">
-            ADMIN
-          </span>
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-[10px] font-extrabold text-accent bg-accent/10 border border-accent/30 px-2 py-0.5 rounded">
+              ADMIN
+            </span>
+            {admin?.role && (
+              <span className="text-[9px] font-bold text-text-muted/60 uppercase tracking-wider">
+                {admin.role.replace("_", " ")}
+              </span>
+            )}
+          </div>
         </div>
 
         <nav className="flex-1 p-3 space-y-4 overflow-y-auto custom-scrollbar">
@@ -154,7 +167,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="p-3 border-t border-border-dark">
           <div className="mb-2 px-3 py-2 bg-surface-base rounded-xl border border-white/10">
             <span className="text-[10px] text-text-muted font-bold block">Logged in as</span>
-            <span className="text-xs text-white font-bold truncate block">{user?.email || "Admin User"}</span>
+            <span className="text-xs text-white font-bold truncate block">{admin?.email || "Admin User"}</span>
           </div>
           <button
             onClick={handleLogout}

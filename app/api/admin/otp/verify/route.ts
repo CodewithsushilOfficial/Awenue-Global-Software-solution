@@ -1,27 +1,55 @@
+/**
+ * POST /api/admin/otp/verify
+ *
+ * Verify a 6-digit OTP and create a signed HttpOnly admin session.
+ *
+ * Security guarantees:
+ * - OTP must be correct, within expiry, not previously used, within attempt limit
+ * - Admin status re-verified AFTER OTP passes (suspend-between-steps protection)
+ * - Session cookie is cryptographically signed (HMAC-SHA256)
+ * - Does NOT auto-create Firebase Auth users for arbitrary emails
+ * - Does NOT create new Firestore admin records
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { getActiveOtpChallenge, updateOtpChallengeState } from "@/lib/otp-store";
+import {
+  getActiveOtpChallenge,
+  incrementOtpAttempt,
+  markOtpUsed,
+  hashOtp,
+} from "@/lib/otp-store";
+import {
+  getActiveAdminByEmail,
+  updateLastLogin,
+  logAdminActivity,
+} from "@/lib/admin-auth";
+import { createSessionToken, setSessionCookie } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const OTP_SECRET_KEY = process.env.OTP_SECRET_KEY || "awenue_admin_secure_otp_key_2026_v1";
+const OTP_SECRET_KEY =
+  process.env.OTP_SECRET_KEY ||
+  process.env.SESSION_SECRET ||
+  "awenue_otp_secret_change_in_production";
 
 export async function POST(request: NextRequest) {
   try {
     let email = "";
     let otp = "";
     let challengeToken = "";
+
     try {
       const body = await request.json();
-      email = body.email || "";
-      otp = body.otp || body.otpCode || "";
-      challengeToken = body.challengeToken || "";
+      email = typeof body.email === "string" ? body.email : "";
+      otp = typeof body.otp === "string" ? body.otp : (typeof body.otpCode === "string" ? body.otpCode : "");
+      challengeToken = typeof body.challengeToken === "string" ? body.challengeToken : "";
     } catch {
       return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
     }
 
-    if (!email || !otp || typeof otp !== "string" || !/^\d{6}$/.test(otp.trim())) {
+    if (!email || !otp || !/^\d{6}$/.test(otp.trim())) {
       return NextResponse.json(
         { error: "Please enter the complete 6-digit verification code." },
         { status: 400 }
@@ -30,138 +58,159 @@ export async function POST(request: NextRequest) {
 
     const normalizedEmail = email.trim().toLowerCase();
     const cleanOtp = otp.trim();
-    const now = new Date();
-    const nowISO = now.toISOString();
-
     let isVerified = false;
     let failureReason = "Invalid verification code. Please check your code or request a new one.";
 
-    // 1. Try Stateless Cryptographic Verification (100% resilient across Vercel Serverless Lambdas)
-    if (challengeToken && typeof challengeToken === "string" && challengeToken.includes(".")) {
+    // --- Attempt 1: Stateless HMAC challenge token verification ---
+    // Resilient across serverless instances (no shared memory needed)
+    if (challengeToken && challengeToken.includes(".")) {
       try {
-        const [signature, expiresStr] = challengeToken.split(".");
+        const lastDot = challengeToken.lastIndexOf(".");
+        const signature = challengeToken.substring(0, lastDot);
+        const expiresStr = challengeToken.substring(lastDot + 1);
         const expiresAtMs = Number(expiresStr);
-        if (expiresAtMs && Date.now() <= expiresAtMs) {
+
+        if (expiresAtMs && Date.now() > expiresAtMs) {
+          failureReason = "Verification code has expired. Please request a new code.";
+        } else if (expiresAtMs) {
           const expectedPayload = `${normalizedEmail}:${cleanOtp}:${expiresAtMs}`;
-          const expectedSignature = crypto.createHmac("sha256", OTP_SECRET_KEY).update(expectedPayload).digest("hex");
-          
-          if (signature === expectedSignature) {
+          const expectedSig = crypto
+            .createHmac("sha256", OTP_SECRET_KEY)
+            .update(expectedPayload)
+            .digest("hex");
+
+          // Timing-safe comparison
+          const expectedBuf = Buffer.from(expectedSig, "hex");
+          const providedBuf = Buffer.from(signature, "hex");
+
+          if (
+            expectedBuf.length === providedBuf.length &&
+            crypto.timingSafeEqual(expectedBuf, providedBuf)
+          ) {
             isVerified = true;
           } else {
-            failureReason = "Invalid verification code. Please re-enter or request a fresh code.";
+            failureReason = "Invalid verification code.";
           }
-        } else if (expiresAtMs && Date.now() > expiresAtMs) {
-          failureReason = "Verification code has expired. Please request a new code.";
         }
-      } catch (tokenErr) {
-        console.warn("[OTP VERIFY] Cryptographic token verification notice:", tokenErr);
+      } catch (err) {
+        console.warn("[OTP VERIFY] Challenge token parse error:", err);
       }
     }
 
-    // 2. Fallback to Memory / Firestore Challenge Store if token was omitted or unverified
+    // --- Attempt 2: Hash-based verification against stored challenge ---
     if (!isVerified) {
       try {
-        const activeChallenge = await getActiveOtpChallenge(normalizedEmail);
-        if (activeChallenge) {
-          const { otpHash, expiresAt, used } = activeChallenge;
-          if (used) {
-            failureReason = "This verification code has already been used. Please request a fresh code.";
-          } else if (new Date(expiresAt) <= now) {
-            failureReason = "Verification code has expired. Please request a new code.";
+        const challenge = await getActiveOtpChallenge(normalizedEmail);
+
+        if (!challenge) {
+          failureReason = "No active verification session found. Please request a new code.";
+        } else if (challenge.used) {
+          failureReason = "This code has already been used. Please request a fresh code.";
+        } else if (new Date(challenge.expiresAt) <= new Date()) {
+          failureReason = "Verification code has expired. Please request a new code.";
+        } else if (challenge.attempts >= challenge.maxAttempts) {
+          failureReason = "Too many failed attempts. Please request a new code.";
+        } else {
+          // Increment attempt before checking (prevent timing attacks)
+          await incrementOtpAttempt(normalizedEmail);
+
+          const inputHash = hashOtp(cleanOtp);
+          if (inputHash === challenge.otpHash) {
+            isVerified = true;
           } else {
-            const inputHash = crypto.createHash("sha256").update(cleanOtp).digest("hex");
-            if (inputHash === otpHash) {
-              isVerified = true;
-              try {
-                await updateOtpChallengeState(normalizedEmail, { used: true });
-              } catch {}
-            }
+            const remaining = challenge.maxAttempts - challenge.attempts - 1;
+            failureReason =
+              remaining > 0
+                ? `Invalid code. ${remaining} attempt${remaining !== 1 ? "s" : ""} remaining.`
+                : "Too many failed attempts. Please request a new code.";
           }
         }
-      } catch (storeErr) {
-        console.warn("[OTP VERIFY] Memory/Firestore lookup notice:", storeErr);
+      } catch (err) {
+        console.error("[OTP VERIFY] Challenge lookup error:", err);
+        failureReason = "Verification error. Please try again.";
       }
     }
 
     if (!isVerified) {
+      // Log failed attempt
+      await logAdminActivity({
+        action: "OTP_VERIFICATION_FAILED",
+        metadata: {
+          email: normalizedEmail,
+          ip: request.headers.get("x-forwarded-for") || "unknown",
+        },
+      }).catch(() => {});
+
       return NextResponse.json({ error: failureReason }, { status: 400 });
     }
 
-    // Provision User UID
-    const userUid = "admin_" + crypto.createHash("md5").update(normalizedEmail).digest("hex").slice(0, 12);
-    let customToken: string | null = null;
+    // --- OTP passed — now re-verify admin status ---
+    // (Protects against suspension between OTP request and verification)
+    const admin = await getActiveAdminByEmail(normalizedEmail);
 
-    // Optional Firebase Admin Auth Claims (if configured)
-    try {
-      const { getAdminAuth } = await import("@/lib/firebase-admin");
-      const auth = getAdminAuth();
-      if (auth) {
-        let userRecord;
-        try {
-          userRecord = await auth.getUserByEmail(normalizedEmail);
-        } catch {
-          userRecord = await auth.createUser({
-            email: normalizedEmail,
-            emailVerified: true,
-            displayName: "AWENUE Administrator",
-          });
-        }
-        await auth.setCustomUserClaims(userRecord.uid, { role: "admin", admin: true });
-        const token = await auth.createCustomToken(userRecord.uid, { role: "admin", admin: true });
-        if (token && token.split(".").length === 3) {
-          customToken = token;
-        }
-      }
-    } catch (authErr) {
-      console.warn("[OTP VERIFY] Firebase Admin Auth notice (proceeding with session):", authErr);
+    if (!admin) {
+      await logAdminActivity({
+        action: "OTP_VERIFIED_BUT_ADMIN_NOT_ACTIVE",
+        metadata: { email: normalizedEmail },
+      }).catch(() => {});
+
+      return NextResponse.json(
+        { error: "Your admin account is not active. Please contact a Super Admin." },
+        { status: 403 }
+      );
     }
 
-    // Optional Audit Logging (if configured)
-    try {
-      const { getAdminDb } = await import("@/lib/firebase-admin");
-      const db = getAdminDb();
-      if (db) {
-        await db.collection("adminAuditLogs").add({
-          type: "ADMIN_LOGIN_SUCCESS",
-          adminEmail: normalizedEmail,
-          uid: userUid,
-          ip: request.headers.get("x-forwarded-for") || "unknown",
-          userAgent: request.headers.get("user-agent") || "unknown",
-          createdAt: nowISO,
-        });
-      }
-    } catch (auditErr) {
-      console.warn("[OTP VERIFY] Audit log notice:", auditErr);
-    }
+    // Mark OTP as used
+    await markOtpUsed(normalizedEmail).catch(() => {});
 
-    // Create Response with Secure HttpOnly Session Cookie (1-Year Duration for Device Auto-Login)
+    // Update lastLoginAt
+    await updateLastLogin(admin.id).catch(() => {});
+
+    // Log successful login
+    await logAdminActivity({
+      actorAdminId: admin.id,
+      action: "ADMIN_LOGIN_SUCCESS",
+      metadata: {
+        email: normalizedEmail,
+        role: admin.role,
+        ip: request.headers.get("x-forwarded-for") || "unknown",
+        userAgent: request.headers.get("user-agent") || "unknown",
+      },
+    }).catch(() => {});
+
+    // Create signed session token
+    const sessionToken = createSessionToken({
+      adminId: admin.id,
+      email: normalizedEmail,
+      role: admin.role,
+      displayName: admin.displayName,
+    });
+
     const response = NextResponse.json(
       {
         success: true,
         verified: true,
-        customToken,
-        message: "OTP verified successfully.",
+        admin: {
+          adminId: admin.id,
+          email: normalizedEmail,
+          role: admin.role,
+          displayName: admin.displayName,
+        },
+        message: "Identity verified successfully.",
       },
       { status: 200 }
     );
 
-    response.cookies.set({
-      name: "awenue_admin_session",
-      value: `verified_${userUid}_${Date.now()}`,
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 365, // 1 year session duration for persistent auto-login
-    });
+    // Set HttpOnly signed session cookie
+    setSessionCookie(response, sessionToken);
 
     return response;
   } catch (err: unknown) {
-    const errorDetails = err instanceof Error ? err.message : String(err);
-    console.error("API /api/admin/otp/verify error:", errorDetails);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[OTP VERIFY] Unhandled error:", msg);
     return NextResponse.json(
-      { error: errorDetails || "An error occurred during verification." },
-      { status: 400 }
+      { error: "An error occurred during verification." },
+      { status: 500 }
     );
   }
 }

@@ -17,7 +17,7 @@ import {
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const { loginWithCustomToken, user, isAdmin, isOtpVerified, loading } = useAuth();
+  const { isAdmin, loading, refreshSession } = useAuth();
 
   // Step state: "email" | "otp"
   const [step, setStep] = useState<"email" | "otp">("email");
@@ -33,12 +33,12 @@ export default function AdminLoginPage() {
   const [cooldownSeconds, setCooldownSeconds] = useState<number>(0);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // If already logged in and 2FA verified, redirect to dashboard
+  // If already have a valid session, redirect to dashboard
   useEffect(() => {
-    if (!loading && user && isAdmin && isOtpVerified) {
+    if (!loading && isAdmin) {
       router.replace("/admin/dashboard");
     }
-  }, [user, isAdmin, isOtpVerified, loading, router]);
+  }, [isAdmin, loading, router]);
 
   // Cooldown countdown effect
   useEffect(() => {
@@ -135,21 +135,18 @@ export default function AdminLoginPage() {
     setErrorMessage(null);
 
     try {
-      // Primary OTP Verification Endpoint
-      let result = await safeFetchJson("/api/admin/otp/verify", { email, otp: fullOtp, challengeToken });
-
-      // Secondary Fallback Endpoint
-      if (!result.ok) {
-        console.warn("Primary verify endpoint failed, attempting fallback endpoint...");
-        result = await safeFetchJson("/api/admin/verify-otp", { email, otpCode: fullOtp, challengeToken });
-      }
+      const result = await safeFetchJson("/api/admin/otp/verify", {
+        email,
+        otp: fullOtp,
+        challengeToken,
+      });
 
       if (!result.ok) {
         throw new Error(result.data?.error || "Invalid verification code.");
       }
 
-      // Complete login with Custom Token & persist admin email for device auto-login
-      await loginWithCustomToken(result.data?.customToken, email);
+      // Refresh session state from server cookie (set by verify endpoint)
+      await refreshSession();
       router.push("/admin/dashboard");
     } catch (err: unknown) {
       console.error("OTP Verification error:", err);

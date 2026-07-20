@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
 
     // Store in global memory store + Firestore safely
     try {
-      await createOtpChallenge(targetEmail, rawOtp);
+      await createOtpChallenge(targetEmail, targetEmail, rawOtp);
     } catch (storeErr) {
       console.warn("OTP create challenge notice:", storeErr);
     }

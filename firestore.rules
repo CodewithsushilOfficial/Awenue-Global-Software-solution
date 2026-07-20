@@ -2,108 +2,143 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to verify Admin privilege (Case-insensitive & Flexible)
-    function isAdmin() {
-      return request.auth != null && (
-        request.auth.token.role == 'admin' ||
-        request.auth.token.admin == true ||
-        request.auth.token.email == 'Codewithsushil7236@gmail.com' ||
-        request.auth.token.email == 'codewithsushil7236@gmail.com' ||
-        request.auth.token.email.matches('(?i)^codewithsushil7236@gmail\\.com$') ||
-        request.auth.token.email.matches('(?i)^.*admin.*$')
-      );
+    // ─────────────────────────────────────────────────────────────────────────
+    // HELPER FUNCTIONS
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Authenticated Firebase user with verified admin custom claim
+    function isFirebaseAdmin() {
+      return request.auth != null &&
+             request.auth.token.admin == true;
     }
 
-    // Helper function to check if request is from an authenticated user or admin
-    function isAuth() {
-      return request.auth != null || isAdmin();
+    // Authenticated user (any Firebase auth)
+    function isAuthenticated() {
+      return request.auth != null;
     }
 
-    // Admins Collection
+    // ─────────────────────────────────────────────────────────────────────────
+    // ADMIN SECURITY COLLECTIONS — NO PUBLIC ACCESS
+    // All access is mediated by Firebase Admin SDK (server-side only)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Admin identities — no direct client read/write
     match /admins/{adminId} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
 
-    // Registered Users Collection
+    // Admin invitations — no direct client access
+    match /adminInvitations/{invitationId} {
+      allow read, write: if false;
+    }
+
+    // OTP challenges — no direct client access (server-side only)
+    match /adminOtpChallenges/{challengeId} {
+      allow read, write: if false;
+    }
+
+    // Admin activity audit logs — no direct client access
+    match /adminActivityLogs/{logId} {
+      allow read, write: if false;
+    }
+
+    // Legacy audit log collection name — also locked
+    match /adminAuditLogs/{logId} {
+      allow read, write: if false;
+    }
+
+    // Legacy OTP collection — locked
+    match /adminOtps/{otpId} {
+      allow read, write: if false;
+    }
+
+    // Admin settings — locked
+    match /adminSettings/{settingId} {
+      allow read: if isFirebaseAdmin();
+      allow write: if false;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // REGISTERED USERS COLLECTION
+    // ─────────────────────────────────────────────────────────────────────────
+
     match /users/{userId} {
-      allow read, write: if true;
+      // Users can read/write their own document
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      // Admins can read all user documents (via client SDK with claims)
+      allow read: if isFirebaseAdmin();
     }
 
-    // Public Website Content Collections (Read by all, Write allowed)
+    // ─────────────────────────────────────────────────────────────────────────
+    // PUBLIC WEBSITE CONTENT — Readable by all, write via admin server only
+    // ─────────────────────────────────────────────────────────────────────────
+
     match /websiteContent/{docId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if false;  // Server-side Admin SDK only
     }
 
     match /siteContent/{docId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if false;
     }
 
     match /services/{serviceId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if false;
     }
 
     match /products/{productId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if false;
     }
 
     match /processSteps/{stepId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if false;
     }
 
     match /portfolio/{portfolioId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if false;
     }
 
     match /portfolioProjects/{portfolioId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if false;
     }
 
     match /settings/{settingId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if false;
     }
 
-    match /adminSettings/{settingId} {
-      allow read: if true;
-      allow write: if true;
-    }
+    // ─────────────────────────────────────────────────────────────────────────
+    // BUSINESS LEADS & INQUIRIES
+    // Public can create (contact forms), admins can manage via server SDK
+    // ─────────────────────────────────────────────────────────────────────────
 
-    // Business Leads & Inquiries
     match /projectInquiries/{inquiryId} {
-      allow read, create, update, delete: if true;
+      allow create: if true;      // Anyone can submit a project inquiry
+      allow read, update, delete: if false;  // Admin access via server SDK only
     }
 
     match /consultationRequests/{consultationId} {
-      allow read, create, update, delete: if true;
+      allow create: if true;
+      allow read, update, delete: if false;
     }
 
     match /generalQueries/{queryId} {
-      allow read, create, update, delete: if true;
+      allow create: if true;
+      allow read, update, delete: if false;
     }
 
-    // Email Communication Records & Logs
+    // ─────────────────────────────────────────────────────────────────────────
+    // EMAIL COMMUNICATION RECORDS
+    // ─────────────────────────────────────────────────────────────────────────
+
     match /emailCommunications/{commId} {
-      allow read, write: if true;
-    }
-
-    // Internal Security Collections
-    match /adminOtpChallenges/{challengeId} {
-      allow read, write: if true;
-    }
-
-    match /adminOtps/{otpId} {
-      allow read, write: if true;
-    }
-
-    match /adminAuditLogs/{logId} {
-      allow read, write: if true;
+      allow read, write: if false;  // Server-side Admin SDK only
     }
   }
 }

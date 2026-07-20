@@ -1,138 +1,119 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
-import {
-  onAuthStateChanged,
-  signInWithCustomToken,
-  signOut,
-  type User,
-} from "firebase/auth";
+/**
+ * AWENUE Admin AuthProvider
+ *
+ * Session state is determined EXCLUSIVELY by the server-side signed
+ * HttpOnly cookie — never by localStorage or client-side flags.
+ *
+ * On mount: calls /api/admin/auth/me to hydrate admin state.
+ * On logout: calls /api/admin/logout to clear the server session cookie.
+ *
+ * This eliminates the localStorage bypass vulnerability from the previous
+ * implementation where setting "awenue_admin_otp_verified" = "true" in
+ * localStorage would grant admin access without a valid server session.
+ */
+
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 
+export interface AdminUser {
+  adminId: string;
+  email: string;
+  role: string;
+  displayName: string;
+  status?: string;
+}
+
 interface AuthContextType {
-  user: User | { email: string; displayName?: string } | null;
+  admin: AdminUser | null;
   isAdmin: boolean;
-  isOtpVerified: boolean;
-  setOtpVerified: (val: boolean, email?: string) => void;
   loading: boolean;
-  loginWithCustomToken: (customToken?: string, targetEmail?: string) => Promise<void>;
+  refreshSession: () => Promise<void>;
   logout: () => Promise<void>;
+  /** @deprecated Use admin.email instead */
+  user: { email: string; displayName?: string } | null;
+  /** @deprecated Session is server-side — always true if admin is set */
+  isOtpVerified: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | { email: string; displayName?: string } | null>(null);
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
-  const [isOtpVerified, setIsOtpVerifiedState] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return (
-        localStorage.getItem("awenue_admin_otp_verified") === "true" ||
-        sessionStorage.getItem("awenue_admin_otp_verified") === "true"
-      );
-    }
-    return false;
-  });
+  const [admin, setAdmin] = useState<AdminUser | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || "Codewithsushil7236@gmail.com";
-
-  const setOtpVerified = (val: boolean, email?: string) => {
-    setIsOtpVerifiedState(val);
-    if (typeof window !== "undefined") {
-      if (val) {
-        localStorage.setItem("awenue_admin_otp_verified", "true");
-        sessionStorage.setItem("awenue_admin_otp_verified", "true");
-        if (email) {
-          localStorage.setItem("awenue_admin_email", email.toLowerCase());
-        }
-      } else {
-        localStorage.removeItem("awenue_admin_otp_verified");
-        localStorage.removeItem("awenue_admin_email");
-        sessionStorage.removeItem("awenue_admin_otp_verified");
-      }
-    }
-  };
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      const isPersistentVerified =
-        typeof window !== "undefined" &&
-        (localStorage.getItem("awenue_admin_otp_verified") === "true" ||
-          sessionStorage.getItem("awenue_admin_otp_verified") === "true");
-
-      const savedEmail =
-        (typeof window !== "undefined" && localStorage.getItem("awenue_admin_email")) ||
-        adminEmail;
-
-      if (currentUser) {
-        setUser(currentUser);
-        setIsAdmin(true);
-        if (isPersistentVerified) {
-          setIsOtpVerifiedState(true);
-        }
-      } else if (isPersistentVerified) {
-        // Persistent admin session stored in device localStorage
-        setIsAdmin(true);
-        setIsOtpVerifiedState(true);
-        setUser({ email: savedEmail, displayName: "AWENUE Administrator" });
-      } else {
-        setIsAdmin(false);
-        setIsOtpVerifiedState(false);
-        setUser(null);
-      }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [adminEmail]);
-
-  const loginWithCustomToken = async (customToken?: string, targetEmail?: string) => {
-    setLoading(true);
-    const emailToUse = targetEmail || adminEmail;
+  const fetchSession = useCallback(async () => {
     try {
-      if (customToken && typeof customToken === "string" && customToken.split(".").length === 3) {
-        try {
-          await signInWithCustomToken(auth, customToken);
-        } catch (authErr) {
-          console.warn("Client Firebase Auth custom token sign-in notice:", authErr);
-        }
+      const res = await fetch("/api/admin/auth/me", {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setAdmin({
+          adminId: data.adminId,
+          email: data.email,
+          role: data.role,
+          displayName: data.displayName,
+          status: data.status,
+        });
+      } else {
+        setAdmin(null);
       }
-      // Guarantee persistent OTP verification & admin state in device storage
-      setOtpVerified(true, emailToUse);
-      setIsAdmin(true);
-      setUser({ email: emailToUse, displayName: "AWENUE Administrator" });
+    } catch {
+      setAdmin(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  // Hydrate session on mount
+  useEffect(() => {
+    fetchSession();
+  }, [fetchSession]);
+
+  const refreshSession = useCallback(async () => {
+    setLoading(true);
+    await fetchSession();
+  }, [fetchSession]);
+
+  const logout = useCallback(async () => {
     try {
-      await fetch("/api/admin/logout", { method: "POST" });
-    } catch (err) {
-      console.warn("Logout API call failed:", err);
+      await fetch("/api/admin/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      // Even if API call fails, clear local state
     }
+
+    // Also sign out of Firebase client if applicable
     try {
       await signOut(auth);
-    } catch (sErr) {
-      console.warn("Firebase signOut notice:", sErr);
+    } catch {
+      // Non-fatal
     }
-    setOtpVerified(false);
-    setIsAdmin(false);
-    setUser(null);
-  };
+
+    setAdmin(null);
+  }, []);
+
+  const isAdmin = admin !== null && admin.status !== "suspended" && admin.status !== "revoked";
 
   return (
     <AuthContext.Provider
       value={{
-        user,
+        admin,
         isAdmin,
-        isOtpVerified,
-        setOtpVerified,
         loading,
-        loginWithCustomToken,
+        refreshSession,
         logout,
+        // Backwards-compatibility shims
+        user: admin ? { email: admin.email, displayName: admin.displayName } : null,
+        isOtpVerified: isAdmin,
       }}
     >
       {children}

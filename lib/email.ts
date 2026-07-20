@@ -351,6 +351,7 @@ export interface AdminInviteEmailData {
   fullName?: string;
   role?: string;
   invitedByName?: string;
+  inviteUrl?: string;  // Secure accept link (includes hashed token)
 }
 
 export async function sendAdminInviteEmail(
@@ -366,13 +367,19 @@ export async function sendAdminInviteEmail(
     return { success: false, error: "SMTP not configured" };
   }
 
-  const loginUrl = process.env.NEXT_PUBLIC_APP_URL
-    ? `${process.env.NEXT_PUBLIC_APP_URL}/admin/login`
-    : "https://awenueglobalsoftwaresolutions.in/admin/login";
+    const acceptUrl = data.inviteUrl || (
+      process.env.NEXT_PUBLIC_APP_URL
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/admin/invite/accept`
+        : "https://awenueglobalsoftwaresolutions.in/admin/invite/accept"
+    );
 
-  try {
-    const subject = `You have been invited as an AWENUE Administrator`;
-    const html = `
+    const expiryNotice = data.inviteUrl
+      ? `<p style="color: #D97706; font-size: 12px; margin: 8px 0 0;">⚠️ This invitation link expires in <strong>48 hours</strong>.</p>`
+      : "";
+
+    try {
+      const subject = `You have been invited as an AWENUE Administrator`;
+      const html = `
       <div style="font-family: Arial, sans-serif; background-color: #0A0F0D; color: #FFFFFF; padding: 32px; border-radius: 12px; max-width: 550px; margin: 0 auto; border: 1px solid rgba(255,255,255,0.1);">
         <div style="text-align: center; margin-bottom: 24px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 16px;">
           <h1 style="color: #FFFFFF; margin: 0; font-size: 24px; font-weight: 900;">AWEN<span style="color: #09B850;">UE</span></h1>
@@ -390,13 +397,18 @@ export async function sendAdminInviteEmail(
           <p style="margin: 0;"><strong>System Access Level:</strong> ${escapeHtml(data.role || "Administrator")}</p>
         </div>
         <p style="color: #A7B0AC; font-size: 13px; line-height: 1.6;">
-          You can now log in using 2-Factor Email OTP verification:
+          Click the button below to activate your account and complete setup:
         </p>
         <div style="text-align: center; margin: 24px 0;">
-          <a href="${loginUrl}" style="background-color: #09B850; color: #0A0F0D; text-decoration: none; font-weight: bold; font-size: 14px; padding: 12px 28px; border-radius: 10px; display: inline-block;">
-            Access Admin Portal &rarr;
+          <a href="${acceptUrl}" style="background-color: #09B850; color: #0A0F0D; text-decoration: none; font-weight: bold; font-size: 14px; padding: 12px 28px; border-radius: 10px; display: inline-block;">
+            Activate My Admin Account &rarr;
           </a>
+          ${expiryNotice}
         </div>
+        <p style="color: #6B7280; font-size: 12px; margin-top: 8px; text-align: center;">
+          If you cannot click the button, copy this link into your browser:<br/>
+          <span style="color: #09B850; word-break: break-all;">${acceptUrl}</span>
+        </p>
         <div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); color: #6B7280; font-size: 12px;">
           — <strong>AWENUE Admin Team</strong><br/>
           <span>Avenue Global Software Solutions</span>
@@ -404,7 +416,7 @@ export async function sendAdminInviteEmail(
       </div>
     `;
 
-    const text = `Administrator Invitation\n\nYou have been invited to join the AWENUE Admin Portal.\n\nAuthorized Email: ${data.recipientEmail}\nSystem Access Level: ${data.role || "Administrator"}\n\nSign in at: ${loginUrl}\n\n— AWENUE Admin Team`;
+    const text = `Administrator Invitation\n\nYou have been invited to join the AWENUE Admin Portal.\n\nAuthorized Email: ${data.recipientEmail}\nSystem Access Level: ${data.role || "Administrator"}\n\nActivate your account at: ${acceptUrl}\n\nThis link expires in 48 hours.\n\n— AWENUE Admin Team`;
 
     const sendPromise = transporter.sendMail({
       from: fromEmail,
