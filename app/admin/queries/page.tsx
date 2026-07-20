@@ -100,18 +100,25 @@ export default function AdminGeneralQueriesPage() {
         updatedAt,
       };
 
-      const res = await fetch("/api/admin/cms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "update",
-          collectionName: "generalQueries",
-          docId: selectedQuery.id,
-          data: updatePayload,
-        }),
-      });
+      let serverSuccess = false;
+      try {
+        const res = await fetch("/api/admin/cms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "update",
+            collectionName: "generalQueries",
+            docId: selectedQuery.id,
+            data: updatePayload,
+          }),
+        });
+        const json = await res.json();
+        if (res.ok && json.success) serverSuccess = true;
+      } catch (sErr) {
+        console.warn("Server update notice:", sErr);
+      }
 
-      if (!res.ok) {
+      if (!serverSuccess) {
         const docRef = doc(db, "generalQueries", selectedQuery.id);
         await updateDoc(docRef, updatePayload);
       }
@@ -129,22 +136,6 @@ export default function AdminGeneralQueriesPage() {
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       console.error("Error updating query:", err);
-      try {
-        const docRef = doc(db, "generalQueries", selectedQuery.id);
-        await updateDoc(docRef, { status: statusInput, adminNotes: notesInput, updatedAt: new Date().toISOString() });
-        setQueriesList((prev) =>
-          prev.map((item) =>
-            item.id === selectedQuery.id
-              ? { ...item, status: statusInput, adminNotes: notesInput }
-              : item
-          )
-        );
-        setSelectedQuery(null);
-        setFeedback("Query updated successfully.");
-        setTimeout(() => setFeedback(null), 3000);
-      } catch (fErr) {
-        console.error("Fallback update query failed:", fErr);
-      }
     } finally {
       setIsUpdating(false);
     }
@@ -152,15 +143,27 @@ export default function AdminGeneralQueriesPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      await fetch("/api/admin/cms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "delete",
-          collectionName: "generalQueries",
-          docId: id,
-        }),
-      });
+      let serverSuccess = false;
+      try {
+        const res = await fetch("/api/admin/cms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "delete",
+            collectionName: "generalQueries",
+            docId: id,
+          }),
+        });
+        const json = await res.json();
+        if (res.ok && json.success) serverSuccess = true;
+      } catch (sErr) {
+        console.warn("Server delete notice:", sErr);
+      }
+
+      if (!serverSuccess) {
+        await deleteDoc(doc(db, "generalQueries", id));
+      }
+
       setQueriesList((prev) => prev.filter((item) => item.id !== id));
       setDeleteConfirmId(null);
       if (selectedQuery?.id === id) setSelectedQuery(null);
@@ -168,14 +171,6 @@ export default function AdminGeneralQueriesPage() {
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       console.error("Error deleting query:", err);
-      try {
-        await deleteDoc(doc(db, "generalQueries", id));
-        setQueriesList((prev) => prev.filter((item) => item.id !== id));
-        setDeleteConfirmId(null);
-        if (selectedQuery?.id === id) setSelectedQuery(null);
-      } catch (fErr) {
-        console.error("Fallback delete query failed:", fErr);
-      }
     }
   };
 

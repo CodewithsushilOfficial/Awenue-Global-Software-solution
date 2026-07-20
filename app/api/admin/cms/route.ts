@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminDb } from "@/lib/firebase-admin";
+import { getAdminDb, isAdminCertAvailable } from "@/lib/firebase-admin";
 import { collection as clientCollection, getDocs, query, orderBy } from "firebase/firestore";
 import { db as clientDb } from "@/lib/firebase";
 
@@ -12,15 +12,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Target collection name is required." }, { status: 400 });
     }
 
-    // 1. Try Admin SDK Firestore first
-    const adminFirestore = getAdminDb();
-    if (adminFirestore) {
-      try {
-        const snap = await adminFirestore.collection(collectionName).orderBy("createdAt", "desc").get();
-        const list = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        return NextResponse.json({ success: true, data: list });
-      } catch (adminErr) {
-        console.warn(`[CMS GET] Admin SDK fetch failed for ${collectionName}, trying Client SDK:`, adminErr);
+    // 1. Try Admin SDK Firestore first if cert available
+    if (isAdminCertAvailable()) {
+      const adminFirestore = getAdminDb();
+      if (adminFirestore) {
+        try {
+          const snap = await adminFirestore.collection(collectionName).orderBy("createdAt", "desc").get();
+          const list = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+          return NextResponse.json({ success: true, data: list });
+        } catch (adminErr) {
+          console.warn(`[CMS GET] Admin SDK fetch failed for ${collectionName}, trying Client SDK:`, adminErr);
+        }
       }
     }
 
@@ -47,53 +49,55 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const adminFirestore = getAdminDb();
-    if (adminFirestore) {
-      const targetCollection = adminFirestore.collection(collectionName);
-      const nowISO = new Date().toISOString();
+    if (isAdminCertAvailable()) {
+      const adminFirestore = getAdminDb();
+      if (adminFirestore) {
+        const targetCollection = adminFirestore.collection(collectionName);
+        const nowISO = new Date().toISOString();
 
-      if (action === "delete") {
-        if (!docId) {
-          return NextResponse.json({ error: "Document ID is required for deletion." }, { status: 400 });
+        if (action === "delete") {
+          if (!docId) {
+            return NextResponse.json({ error: "Document ID is required for deletion." }, { status: 400 });
+          }
+          await targetCollection.doc(docId).delete();
+          return NextResponse.json({ success: true, message: "Document deleted successfully." });
         }
-        await targetCollection.doc(docId).delete();
-        return NextResponse.json({ success: true, message: "Document deleted successfully." });
+
+        if (action === "add" || !docId) {
+          const docRef = await targetCollection.add({
+            ...data,
+            createdAt: data?.createdAt || nowISO,
+            updatedAt: nowISO,
+          });
+          return NextResponse.json({ success: true, id: docRef.id, message: "Document added successfully." });
+        }
+
+        if (action === "update") {
+          await targetCollection.doc(docId).update({
+            ...data,
+            updatedAt: nowISO,
+          });
+          return NextResponse.json({ success: true, id: docId, message: "Document updated successfully." });
+        }
+
+        // Default "set" action (UPSERT)
+        await targetCollection.doc(docId).set(
+          {
+            ...data,
+            updatedAt: nowISO,
+          },
+          { merge: true }
+        );
+
+        return NextResponse.json({ success: true, id: docId, message: "CMS content saved successfully." });
       }
-
-      if (action === "add" || !docId) {
-        const docRef = await targetCollection.add({
-          ...data,
-          createdAt: data?.createdAt || nowISO,
-          updatedAt: nowISO,
-        });
-        return NextResponse.json({ success: true, id: docRef.id, message: "Document added successfully." });
-      }
-
-      if (action === "update") {
-        await targetCollection.doc(docId).update({
-          ...data,
-          updatedAt: nowISO,
-        });
-        return NextResponse.json({ success: true, id: docId, message: "Document updated successfully." });
-      }
-
-      // Default "set" action (UPSERT)
-      await targetCollection.doc(docId).set(
-        {
-          ...data,
-          updatedAt: nowISO,
-        },
-        { merge: true }
-      );
-
-      return NextResponse.json({ success: true, id: docId, message: "CMS content saved successfully." });
     }
 
     return NextResponse.json(
       {
         success: false,
         useClientFallback: true,
-        notice: "Server Admin SDK not initialized; proceeding via client SDK.",
+        notice: "Server Admin SDK cert unavailable; proceeding via client SDK.",
       },
       { status: 200 }
     );

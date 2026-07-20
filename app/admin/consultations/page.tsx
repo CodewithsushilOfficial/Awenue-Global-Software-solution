@@ -103,18 +103,25 @@ export default function AdminConsultationsPage() {
         updatedAt,
       };
 
-      const res = await fetch("/api/admin/cms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "update",
-          collectionName: "consultationRequests",
-          docId: selectedConsultation.id,
-          data: payload,
-        }),
-      });
+      let serverSuccess = false;
+      try {
+        const res = await fetch("/api/admin/cms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "update",
+            collectionName: "consultationRequests",
+            docId: selectedConsultation.id,
+            data: payload,
+          }),
+        });
+        const json = await res.json();
+        if (res.ok && json.success) serverSuccess = true;
+      } catch (sErr) {
+        console.warn("Server update notice:", sErr);
+      }
 
-      if (!res.ok) {
+      if (!serverSuccess) {
         const docRef = doc(db, "consultationRequests", selectedConsultation.id);
         await updateDoc(docRef, payload);
       }
@@ -132,20 +139,6 @@ export default function AdminConsultationsPage() {
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       console.error("Error updating consultation:", err);
-      try {
-        const docRef = doc(db, "consultationRequests", selectedConsultation.id);
-        await updateDoc(docRef, { status: statusInput, adminNotes: notesInput, updatedAt: new Date().toISOString() });
-        setConsultations((prev) =>
-          prev.map((item) =>
-            item.id === selectedConsultation.id
-              ? { ...item, status: statusInput, adminNotes: notesInput }
-              : item
-          )
-        );
-        setSelectedConsultation(null);
-      } catch (fErr) {
-        console.error("Fallback update consultation failed:", fErr);
-      }
     } finally {
       setIsUpdating(false);
     }
@@ -153,15 +146,26 @@ export default function AdminConsultationsPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      await fetch("/api/admin/cms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "delete",
-          collectionName: "consultationRequests",
-          docId: id,
-        }),
-      });
+      let serverSuccess = false;
+      try {
+        const res = await fetch("/api/admin/cms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "delete",
+            collectionName: "consultationRequests",
+            docId: id,
+          }),
+        });
+        const json = await res.json();
+        if (res.ok && json.success) serverSuccess = true;
+      } catch (sErr) {
+        console.warn("Server delete notice:", sErr);
+      }
+
+      if (!serverSuccess) {
+        await deleteDoc(doc(db, "consultationRequests", id));
+      }
 
       setConsultations((prev) => prev.filter((item) => item.id !== id));
       setDeleteConfirmId(null);
@@ -170,14 +174,6 @@ export default function AdminConsultationsPage() {
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       console.error("Error deleting consultation:", err);
-      try {
-        await deleteDoc(doc(db, "consultationRequests", id));
-        setConsultations((prev) => prev.filter((item) => item.id !== id));
-        setDeleteConfirmId(null);
-        if (selectedConsultation?.id === id) setSelectedConsultation(null);
-      } catch (fErr) {
-        console.error("Fallback delete consultation failed:", fErr);
-      }
     }
   };
 

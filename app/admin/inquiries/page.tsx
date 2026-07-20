@@ -106,18 +106,25 @@ export default function AdminInquiriesPage() {
         updatedAt,
       };
 
-      const res = await fetch("/api/admin/cms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "update",
-          collectionName: "projectInquiries",
-          docId: selectedInquiry.id,
-          data: payload,
-        }),
-      });
+      let serverSuccess = false;
+      try {
+        const res = await fetch("/api/admin/cms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "update",
+            collectionName: "projectInquiries",
+            docId: selectedInquiry.id,
+            data: payload,
+          }),
+        });
+        const json = await res.json();
+        if (res.ok && json.success) serverSuccess = true;
+      } catch (sErr) {
+        console.warn("Server update notice:", sErr);
+      }
 
-      if (!res.ok) {
+      if (!serverSuccess) {
         const docRef = doc(db, "projectInquiries", selectedInquiry.id);
         await updateDoc(docRef, payload);
       }
@@ -135,20 +142,6 @@ export default function AdminInquiriesPage() {
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       console.error("Error updating inquiry:", err);
-      try {
-        const docRef = doc(db, "projectInquiries", selectedInquiry.id);
-        await updateDoc(docRef, { status: statusInput, adminNotes: notesInput, updatedAt: new Date().toISOString() });
-        setInquiries((prev) =>
-          prev.map((item) =>
-            item.id === selectedInquiry.id
-              ? { ...item, status: statusInput, adminNotes: notesInput }
-              : item
-          )
-        );
-        setSelectedInquiry(null);
-      } catch (fErr) {
-        console.error("Fallback update inquiry failed:", fErr);
-      }
     } finally {
       setIsUpdating(false);
     }
@@ -156,15 +149,26 @@ export default function AdminInquiriesPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      await fetch("/api/admin/cms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "delete",
-          collectionName: "projectInquiries",
-          docId: id,
-        }),
-      });
+      let serverSuccess = false;
+      try {
+        const res = await fetch("/api/admin/cms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "delete",
+            collectionName: "projectInquiries",
+            docId: id,
+          }),
+        });
+        const json = await res.json();
+        if (res.ok && json.success) serverSuccess = true;
+      } catch (sErr) {
+        console.warn("Server delete notice:", sErr);
+      }
+
+      if (!serverSuccess) {
+        await deleteDoc(doc(db, "projectInquiries", id));
+      }
 
       setInquiries((prev) => prev.filter((item) => item.id !== id));
       setDeleteConfirmId(null);
@@ -173,14 +177,6 @@ export default function AdminInquiriesPage() {
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       console.error("Error deleting inquiry:", err);
-      try {
-        await deleteDoc(doc(db, "projectInquiries", id));
-        setInquiries((prev) => prev.filter((item) => item.id !== id));
-        setDeleteConfirmId(null);
-        if (selectedInquiry?.id === id) setSelectedInquiry(null);
-      } catch (fErr) {
-        console.error("Fallback delete inquiry failed:", fErr);
-      }
     }
   };
 
