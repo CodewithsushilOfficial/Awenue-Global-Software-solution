@@ -105,20 +105,31 @@ export async function authorizeGoogleAdmin(idToken: string): Promise<
       }
     }
 
-    // Fallback: Verify via Google OAuth2 tokeninfo public API if Admin SDK is unavailable or failed
+    // Fallback: Verify via Google Firebase Auth REST API (accounts:lookup) if Admin SDK is unavailable or failed
     if (!googleEmail || !googleUid) {
       try {
-        const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.email && (data.email_verified === "true" || data.email_verified === true)) {
-            googleUid = data.sub || data.user_id;
-            googleEmail = data.email;
-            googleName = data.name || null;
+        const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyATYJjw7vTC6NMKtoODxzfBewMxgWBE--s";
+        if (apiKey) {
+          const res = await fetch(
+            `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ idToken }),
+            }
+          );
+          if (res.ok) {
+            const data = await res.json();
+            const user = data.users?.[0];
+            if (user && user.email) {
+              googleUid = user.localId;
+              googleEmail = user.email;
+              googleName = user.displayName || user.providerUserInfo?.[0]?.displayName || null;
+            }
           }
         }
       } catch (fallbackErr) {
-        console.warn("[ADMIN AUTH] Google tokeninfo fallback notice:", fallbackErr);
+        console.warn("[ADMIN AUTH] Firebase Auth REST lookup fallback notice:", fallbackErr);
       }
     }
 

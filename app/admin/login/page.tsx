@@ -51,11 +51,11 @@ export default function AdminLoginPage() {
       let data: { error?: string } = {};
 
       if (contentType.includes("application/json")) {
-        data = await res.json();
-      } else {
-        const text = await res.text();
-        console.warn("Non-JSON server response:", text.slice(0, 200));
-        throw new Error(`Server returned error status (${res.status}).`);
+        try {
+          data = await res.json();
+        } catch {
+          // Fallback if parsing fails
+        }
       }
 
       if (!res.ok) {
@@ -82,6 +82,8 @@ export default function AdminLoginPage() {
           msg = "Sign-in popup was blocked by your browser. Please allow popups for this site.";
         } else if (err.message.includes("auth/network-request-failed")) {
           msg = "Network connection error. Please check your internet connection.";
+        } else if (err.message.includes("Server returned error status")) {
+          msg = "Authentication service temporarily unavailable. Please try again in a moment.";
         } else if (err.message) {
           msg = err.message;
         }

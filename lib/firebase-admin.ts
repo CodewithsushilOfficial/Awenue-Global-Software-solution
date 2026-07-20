@@ -1,6 +1,6 @@
-import { initializeApp, getApps, cert, type App } from "firebase-admin/app";
-import { getFirestore, type Firestore } from "firebase-admin/firestore";
-import { getAuth, type Auth } from "firebase-admin/auth";
+import type { App } from "firebase-admin/app";
+import type { Firestore } from "firebase-admin/firestore";
+import type { Auth } from "firebase-admin/auth";
 
 let adminApp: App | null = null;
 let adminDbInstance: Firestore | null = null;
@@ -68,6 +68,9 @@ function getProjectId(): string {
 export function getAdminApp(): App | null {
   if (adminApp) return adminApp;
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { initializeApp, getApps, cert } = require("firebase-admin/app");
+
     if (getApps().length > 0) {
       adminApp = getApps()[0];
       return adminApp;
@@ -110,6 +113,8 @@ export function getAdminDb(): Firestore | null {
   try {
     const app = getAdminApp();
     if (app) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { getFirestore } = require("firebase-admin/firestore");
       adminDbInstance = getFirestore(app);
       return adminDbInstance;
     }
@@ -124,6 +129,8 @@ export function getAdminAuth(): Auth | null {
   try {
     const app = getAdminApp();
     if (app) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { getAuth } = require("firebase-admin/auth");
       adminAuthInstance = getAuth(app);
       return adminAuthInstance;
     }
