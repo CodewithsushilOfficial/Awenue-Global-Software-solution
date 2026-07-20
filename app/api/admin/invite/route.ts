@@ -86,7 +86,61 @@ async function findInvitationDocument(token: string): Promise<Record<string, unk
     console.warn("[FIND INVITATION] Client SDK notice:", clientErr);
   }
 
-  // 3. Fail-safe Fallback: Full scan of recent 50 documents
+  // 3. Tertiary Lookup via Direct Firestore REST API (Fail-Safe for Serverless without Cert)
+  try {
+    const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || "awenue-global";
+    const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+
+    if (apiKey) {
+      for (const colName of collections) {
+        const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${colName}?key=${apiKey}`;
+        const res = await fetch(url, { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          const documents = (data.documents || []) as Array<{ name?: string; fields?: Record<string, { stringValue?: string }> }>;
+
+          for (const doc of documents) {
+            const fields = doc.fields || {};
+            const docId = doc.name ? doc.name.split("/").pop() || "" : "";
+            const tokenHashVal = fields.tokenHash?.stringValue;
+            const rawTokenVal = fields.rawToken?.stringValue;
+            const emailVal = fields.emailNormalized?.stringValue || fields.email?.stringValue;
+            const statusVal = fields.status?.stringValue || "pending";
+            const expiresAtVal = fields.expiresAt?.stringValue;
+            const roleVal = fields.role?.stringValue || "admin";
+            const displayNameVal = fields.displayName?.stringValue || fields.fullName?.stringValue;
+            const invitedByVal = fields.invitedBy?.stringValue;
+
+            const isMatch =
+              docId === cleanToken ||
+              tokenHashVal === hashedToken ||
+              tokenHashVal === cleanToken ||
+              rawTokenVal === cleanToken ||
+              rawTokenVal === hashedToken;
+
+            if (isMatch) {
+              return {
+                id: docId,
+                email: emailVal,
+                emailNormalized: emailVal,
+                displayName: displayNameVal,
+                role: roleVal,
+                status: statusVal,
+                tokenHash: tokenHashVal,
+                rawToken: rawTokenVal,
+                expiresAt: expiresAtVal,
+                invitedBy: invitedByVal,
+              };
+            }
+          }
+        }
+      }
+    }
+  } catch (restErr) {
+    console.warn("[FIND INVITATION] REST API lookup notice:", restErr);
+  }
+
+  // 4. Fail-safe Fallback: Full scan of recent 50 documents
   try {
     for (const colName of collections) {
       const snap = await getDocs(query(clientCollection(clientDb, colName), limit(50)));

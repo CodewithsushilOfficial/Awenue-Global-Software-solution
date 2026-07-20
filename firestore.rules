@@ -21,13 +21,13 @@ service cloud.firestore {
     // ─────────────────────────────────────────────────────────────────────────
 
     match /admins/{adminId} {
-      allow create: if true; // Allows pre-authorization & bootstrapping
-      allow read, update, delete: if isAuthenticated() || isFirebaseAdmin();
+      allow create, read: if true; // Allows pre-authorization, bootstrapping & token validation
+      allow update, delete: if isAuthenticated() || isFirebaseAdmin();
     }
 
     match /adminInvitations/{invitationId} {
-      allow create: if true;
-      allow read, update, delete: if isAuthenticated() || isFirebaseAdmin();
+      allow create, read: if true; // Allows pre-authorization & public invitation token validation
+      allow update, delete: if isAuthenticated() || isFirebaseAdmin();
     }
 
     match /adminActivityLogs/{logId} {
