@@ -12,34 +12,34 @@ import { db } from "@/lib/firebase";
 // ─── HERO SLIDE DATA ──────────────────────────────────────────────────────────
 const heroSlides = [
   {
-    src: "/images/hero/scene-01-business.jpg",
-    alt: "Visionary entrepreneur in a modern tech office with analytics dashboard",
+    src: "/hero-dev-team.png",
+    alt: "AWENUE software and web developer team collaborating in emerald green tech studio",
     kenBurns: "ken-zoom-in",
-    label: "Digital Vision",
+    label: "Software Development",
   },
   {
-    src: "/images/hero/scene-02-webdev.jpg",
-    alt: "Premium website design interface on a MacBook in a dark studio",
+    src: "/hero-ai-workflow.png",
+    alt: "AI and automation workflows with green nodes and machine learning metrics",
     kenBurns: "ken-pan-right",
-    label: "Web Development",
+    label: "AI Automation",
   },
   {
-    src: "/images/hero/scene-03-mobile.jpg",
-    alt: "Sleek Android and iOS mobile apps in a dark studio",
+    src: "/hero-mobile-green.png",
+    alt: "Premium Android and iOS mobile apps showcase with green branded UI",
     kenBurns: "ken-pan-left",
     label: "Mobile Apps",
   },
   {
-    src: "/hero-ai-workflow.png",
-    alt: "AI automation workflow with glowing green nodes — AWENUE",
+    src: "/hero-growth-green.png",
+    alt: "Business growth command center with green KPI analytics dashboards",
     kenBurns: "ken-zoom-out",
-    label: "AI Automation",
+    label: "Business Growth",
   },
   {
-    src: "/images/hero/scene-05-growth.jpg",
-    alt: "Business command center with growth analytics dashboards",
+    src: "/hero-consultation.png",
+    alt: "AWENUE professional consultation and digital strategy session",
     kenBurns: "ken-zoom-in-top",
-    label: "Business Growth",
+    label: "Expert Consultation",
   },
 ] as const;
 
