@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { consultationRequestSchema } from "@/lib/validations";
-import { adminDb } from "@/lib/firebase-admin";
+import { getAdminDb } from "@/lib/firebase-admin";
+import { collection as clientCollection, addDoc } from "firebase/firestore";
+import { db as clientDb } from "@/lib/firebase";
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,9 +28,9 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date().toISOString();
+    let docId = "";
 
-    // 3. Save to Firestore
-    const docRef = await adminDb.collection("consultationRequests").add({
+    const consultationRecord = {
       fullName: data.fullName,
       email: data.email,
       phone: data.phone || "",
@@ -39,12 +41,22 @@ export async function POST(request: NextRequest) {
       adminNotes: "",
       createdAt: now,
       updatedAt: now,
-    });
+    };
+
+    // 3. Save to Firestore (Try Admin SDK first, fallback to Client SDK)
+    const adminFirestore = getAdminDb();
+    if (adminFirestore) {
+      const docRef = await adminFirestore.collection("consultationRequests").add(consultationRecord);
+      docId = docRef.id;
+    } else {
+      const docRef = await addDoc(clientCollection(clientDb, "consultationRequests"), consultationRecord);
+      docId = docRef.id;
+    }
 
     return NextResponse.json(
       {
         success: true,
-        id: docRef.id,
+        id: docId,
         message: "Thanks for reaching out! We've received your consultation request.",
       },
       { status: 201 }

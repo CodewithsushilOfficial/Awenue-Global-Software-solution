@@ -92,15 +92,24 @@ export function getAdminApp(): App | null {
             privateKey,
           }),
         });
-        console.log("[Firebase Admin] Service account initialized successfully.");
+        console.log("[Firebase Admin] Service account initialized with cert.");
         return adminApp;
       } catch (err) {
         console.error("[Firebase Admin] Service account cert init failed:", err);
-        return null;
       }
     }
 
-    console.warn("[Firebase Admin] Service account credentials invalid or missing. Operating in fallback mode.");
+    // Fallback init with Project ID so Firestore instance is always available
+    if (projectId) {
+      try {
+        adminApp = initializeApp({ projectId });
+        console.log("[Firebase Admin] Initialized in Project ID fallback mode:", projectId);
+        return adminApp;
+      } catch (err) {
+        console.error("[Firebase Admin] Project ID fallback init failed:", err);
+      }
+    }
+
     return null;
   } catch (err) {
     console.error("[Firebase Admin] App init exception:", err);
@@ -145,8 +154,7 @@ export const adminDb = new Proxy({} as Firestore, {
   get(_target, prop: string | symbol) {
     const instance = getAdminDb();
     if (!instance) {
-      console.warn("[Firebase Admin] Firestore instance requested but unavailable.");
-      return () => Promise.resolve(null);
+      throw new Error("Firebase Admin Firestore is not available. Check environment variables.");
     }
     const val = (instance as unknown as Record<string | symbol, unknown>)[prop];
     return typeof val === "function" ? val.bind(instance) : val;
@@ -157,8 +165,7 @@ export const adminAuth = new Proxy({} as Auth, {
   get(_target, prop: string | symbol) {
     const instance = getAdminAuth();
     if (!instance) {
-      console.warn("[Firebase Admin] Auth instance requested but unavailable.");
-      return () => Promise.resolve(null);
+      throw new Error("Firebase Admin Auth is not available. Check environment variables.");
     }
     const val = (instance as unknown as Record<string | symbol, unknown>)[prop];
     return typeof val === "function" ? val.bind(instance) : val;
