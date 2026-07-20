@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { adminDb } from "@/lib/firebase-admin";
 import { sendAdminOtpEmail } from "@/lib/email";
 import { createOtpChallenge } from "@/lib/otp-store";
 
@@ -32,8 +31,10 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      if (adminDb) {
-        await adminDb.collection("adminOtps").add({
+      const { getAdminDb } = await import("@/lib/firebase-admin");
+      const db = getAdminDb();
+      if (db) {
+        await db.collection("adminOtps").add({
           email: targetEmail,
           otpCode: rawOtp,
           expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),

@@ -6,7 +6,6 @@ import {
   getActiveOtpChallenge,
   invalidatePreviousChallenges,
 } from "@/lib/otp-store";
-import { adminDb } from "@/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,8 +24,10 @@ async function isAuthorizedAdminEmail(email: string): Promise<boolean> {
 
   // 2. Check Firestore 'admins' collection safely
   try {
-    if (adminDb) {
-      const snap = await adminDb
+    const { getAdminDb } = await import("@/lib/firebase-admin");
+    const db = getAdminDb();
+    if (db) {
+      const snap = await db
         .collection("admins")
         .where("email", "==", normalizedEmail)
         .limit(1)

@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import { adminDb } from "@/lib/firebase-admin";
 
 export interface MemoryOtpChallenge {
   adminEmail: string;
@@ -11,7 +10,7 @@ export interface MemoryOtpChallenge {
   createdAt: string;
 }
 
-// Global in-memory OTP cache singleton anchored to globalThis to survive Next.js HMR reloads
+// Global in-memory OTP cache singleton anchored to globalThis
 const globalForOtp = globalThis as unknown as {
   __awenueOtpStore?: Map<string, MemoryOtpChallenge>;
 };
@@ -43,9 +42,13 @@ export async function createOtpChallenge(email: string, rawOtp: string): Promise
   // 1. Store in Server Memory Map singleton
   globalOtpStore.set(normalizedEmail, challenge);
 
-  // 2. Persist to Firestore if available
+  // 2. Persist to Firestore asynchronously if available
   try {
-    await adminDb.collection("adminOtpChallenges").add(challenge);
+    const { getAdminDb } = await import("@/lib/firebase-admin");
+    const db = getAdminDb();
+    if (db) {
+      await db.collection("adminOtpChallenges").add(challenge);
+    }
   } catch (err) {
     console.warn("[OTP STORE] Firestore save skipped (using memory store):", err);
   }
@@ -62,20 +65,23 @@ export async function getActiveOtpChallenge(email: string): Promise<MemoryOtpCha
     return memChallenge;
   }
 
-  // 2. Check Firestore fallback
+  // 2. Check Firestore fallback asynchronously if available
   try {
-    const snap = await adminDb
-      .collection("adminOtpChallenges")
-      .where("adminEmail", "==", normalizedEmail)
-      .get();
+    const { getAdminDb } = await import("@/lib/firebase-admin");
+    const db = getAdminDb();
+    if (db) {
+      const snap = await db
+        .collection("adminOtpChallenges")
+        .where("adminEmail", "==", normalizedEmail)
+        .get();
 
-    if (!snap.empty) {
-      const docs = snap.docs.map((doc) => doc.data() as MemoryOtpChallenge);
-      docs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      const latest = docs[0];
-      // Keep memory map in sync
-      globalOtpStore.set(normalizedEmail, latest);
-      return latest;
+      if (!snap.empty) {
+        const docs = snap.docs.map((doc) => doc.data() as MemoryOtpChallenge);
+        docs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const latest = docs[0];
+        globalOtpStore.set(normalizedEmail, latest);
+        return latest;
+      }
     }
   } catch (err) {
     console.warn("[OTP STORE] Firestore query fallback skipped:", err);
@@ -96,21 +102,25 @@ export async function updateOtpChallengeState(
     Object.assign(memChallenge, updates);
   }
 
-  // 2. Update in Firestore
+  // 2. Update in Firestore asynchronously if available
   try {
-    const snap = await adminDb
-      .collection("adminOtpChallenges")
-      .where("adminEmail", "==", normalizedEmail)
-      .get();
+    const { getAdminDb } = await import("@/lib/firebase-admin");
+    const db = getAdminDb();
+    if (db) {
+      const snap = await db
+        .collection("adminOtpChallenges")
+        .where("adminEmail", "==", normalizedEmail)
+        .get();
 
-    if (!snap.empty) {
-      const batch = adminDb.batch();
-      snap.docs.forEach((doc) => {
-        if (!doc.data().used) {
-          batch.update(doc.ref, updates);
-        }
-      });
-      await batch.commit();
+      if (!snap.empty) {
+        const batch = db.batch();
+        snap.docs.forEach((doc) => {
+          if (!doc.data().used) {
+            batch.update(doc.ref, updates);
+          }
+        });
+        await batch.commit();
+      }
     }
   } catch (err) {
     console.warn("[OTP STORE] Firestore state update skipped:", err);
@@ -126,21 +136,25 @@ export async function invalidatePreviousChallenges(email: string): Promise<void>
     memChallenge.used = true;
   }
 
-  // Clear Firestore
+  // Clear Firestore asynchronously if available
   try {
-    const snap = await adminDb
-      .collection("adminOtpChallenges")
-      .where("adminEmail", "==", normalizedEmail)
-      .get();
+    const { getAdminDb } = await import("@/lib/firebase-admin");
+    const db = getAdminDb();
+    if (db) {
+      const snap = await db
+        .collection("adminOtpChallenges")
+        .where("adminEmail", "==", normalizedEmail)
+        .get();
 
-    if (!snap.empty) {
-      const batch = adminDb.batch();
-      snap.docs.forEach((doc) => {
-        if (!doc.data().used) {
-          batch.update(doc.ref, { used: true, invalidatedReason: "SUPERSEDED" });
-        }
-      });
-      await batch.commit();
+      if (!snap.empty) {
+        const batch = db.batch();
+        snap.docs.forEach((doc) => {
+          if (!doc.data().used) {
+            batch.update(doc.ref, { used: true, invalidatedReason: "SUPERSEDED" });
+          }
+        });
+        await batch.commit();
+      }
     }
   } catch (err) {
     console.warn("[OTP STORE] Firestore invalidation skipped:", err);
