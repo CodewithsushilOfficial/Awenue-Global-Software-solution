@@ -6,6 +6,8 @@ import { createOtpChallenge } from "@/lib/otp-store";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const OTP_SECRET_KEY = process.env.OTP_SECRET_KEY || "awenue_admin_secure_otp_key_2026_v1";
+
 export async function POST(request: NextRequest) {
   try {
     let email = "";
@@ -23,6 +25,12 @@ export async function POST(request: NextRequest) {
     const targetEmail = (process.env.ADMIN_EMAIL || email).toLowerCase();
     const rawOtp = crypto.randomInt(100000, 1000000).toString();
 
+    // Create Cryptographic Challenge Token (Stateless for Vercel Serverless)
+    const expiresAtMs = Date.now() + 10 * 60 * 1000;
+    const hmacPayload = `${targetEmail}:${rawOtp}:${expiresAtMs}`;
+    const hmacSignature = crypto.createHmac("sha256", OTP_SECRET_KEY).update(hmacPayload).digest("hex");
+    const challengeToken = `${hmacSignature}.${expiresAtMs}`;
+
     // Store in global memory store + Firestore safely
     try {
       await createOtpChallenge(targetEmail, rawOtp);
@@ -37,7 +45,7 @@ export async function POST(request: NextRequest) {
         await db.collection("adminOtps").add({
           email: targetEmail,
           otpCode: rawOtp,
-          expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+          expiresAt: new Date(expiresAtMs).toISOString(),
           verified: false,
           createdAt: new Date().toISOString(),
         });
@@ -65,6 +73,7 @@ export async function POST(request: NextRequest) {
         success: true,
         message: emailStatusMessage,
         email: targetEmail,
+        challengeToken,
       },
       { status: 200 }
     );

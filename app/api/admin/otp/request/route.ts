@@ -10,6 +10,8 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const OTP_SECRET_KEY = process.env.OTP_SECRET_KEY || "awenue_admin_secure_otp_key_2026_v1";
+
 // Helper function to check if email is an authorized admin
 async function isAuthorizedAdminEmail(email: string): Promise<boolean> {
   const normalizedEmail = email.trim().toLowerCase();
@@ -105,14 +107,20 @@ export async function POST(request: NextRequest) {
     const rawOtp = crypto.randomInt(100000, 1000000).toString();
     console.log(`[OTP ENGINE] Generated 6-digit OTP for ${normalizedEmail}: ${rawOtp}`);
 
-    // 5. Store OTP challenge in Hybrid Store (Memory + Firestore safely)
+    // 5. Create Cryptographic Challenge Token (Stateless for Vercel Serverless)
+    const expiresAtMs = Date.now() + 10 * 60 * 1000; // 10 minutes validity
+    const hmacPayload = `${normalizedEmail}:${rawOtp}:${expiresAtMs}`;
+    const hmacSignature = crypto.createHmac("sha256", OTP_SECRET_KEY).update(hmacPayload).digest("hex");
+    const challengeToken = `${hmacSignature}.${expiresAtMs}`;
+
+    // 6. Store OTP challenge in Hybrid Store (Memory + Firestore safely)
     try {
       await createOtpChallenge(normalizedEmail, rawOtp);
     } catch (storeErr) {
       console.warn("OTP Challenge store notice:", storeErr);
     }
 
-    // 6. Send OTP via Nodemailer
+    // 7. Send OTP via Nodemailer
     let emailStatusMessage = "A 6-digit verification code has been sent to your email.";
     try {
       const emailResult = await sendAdminOtpEmail(normalizedEmail, rawOtp);
@@ -131,6 +139,7 @@ export async function POST(request: NextRequest) {
         success: true,
         message: emailStatusMessage,
         email: normalizedEmail,
+        challengeToken,
       },
       { status: 200 }
     );

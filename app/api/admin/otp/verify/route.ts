@@ -1,19 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { getActiveOtpChallenge, updateOtpChallengeState } from "@/lib/otp-store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const OTP_SECRET_KEY = process.env.OTP_SECRET_KEY || "awenue_admin_secure_otp_key_2026_v1";
+
 export async function POST(request: NextRequest) {
   try {
     let email = "";
     let otp = "";
+    let challengeToken = "";
     try {
       const body = await request.json();
       email = body.email || "";
       otp = body.otp || body.otpCode || "";
+      challengeToken = body.challengeToken || "";
     } catch {
       return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
     }
@@ -27,114 +30,98 @@ export async function POST(request: NextRequest) {
 
     const normalizedEmail = email.trim().toLowerCase();
     const cleanOtp = otp.trim();
-    const inputHash = crypto.createHash("sha256").update(cleanOtp).digest("hex");
     const now = new Date();
     const nowISO = now.toISOString();
 
-    // 1. Retrieve active challenge from Hybrid OTP Store (Memory + Firestore)
-    let activeChallenge = null;
-    try {
-      activeChallenge = await getActiveOtpChallenge(normalizedEmail);
-    } catch (getErr) {
-      console.warn("Active OTP challenge lookup notice:", getErr);
-    }
+    let isVerified = false;
+    let failureReason = "Invalid verification code. Please check your code or request a new one.";
 
-    if (!activeChallenge) {
-      return NextResponse.json(
-        { error: "No active verification request found. Please request a new code." },
-        { status: 400 }
-      );
-    }
-
-    const { otpHash, expiresAt, attempts = 0, maxAttempts = 5, used } = activeChallenge;
-
-    // Check if already used
-    if (used) {
-      return NextResponse.json(
-        { error: "This verification code has already been used. Please request a fresh code." },
-        { status: 400 }
-      );
-    }
-
-    // Check max verification attempts
-    if (attempts >= maxAttempts) {
+    // 1. Try Stateless Cryptographic Verification (100% resilient across Vercel Serverless Lambdas)
+    if (challengeToken && typeof challengeToken === "string" && challengeToken.includes(".")) {
       try {
-        await updateOtpChallengeState(normalizedEmail, { used: true });
-      } catch {}
-      return NextResponse.json(
-        { error: "Maximum verification attempts exceeded. Please request a new code." },
-        { status: 429 }
-      );
-    }
-
-    // Check 10-minute expiration
-    if (new Date(expiresAt) <= now) {
-      try {
-        await updateOtpChallengeState(normalizedEmail, { used: true });
-      } catch {}
-      return NextResponse.json(
-        { error: "Verification code has expired. Please request a new code." },
-        { status: 400 }
-      );
-    }
-
-    // Verify OTP SHA-256 Hash
-    if (inputHash !== otpHash) {
-      const newAttempts = attempts + 1;
-      const remaining = maxAttempts - newAttempts;
-      try {
-        await updateOtpChallengeState(normalizedEmail, { attempts: newAttempts });
-        if (remaining <= 0) {
-          await updateOtpChallengeState(normalizedEmail, { used: true });
+        const [signature, expiresStr] = challengeToken.split(".");
+        const expiresAtMs = Number(expiresStr);
+        if (expiresAtMs && Date.now() <= expiresAtMs) {
+          const expectedPayload = `${normalizedEmail}:${cleanOtp}:${expiresAtMs}`;
+          const expectedSignature = crypto.createHmac("sha256", OTP_SECRET_KEY).update(expectedPayload).digest("hex");
+          
+          if (signature === expectedSignature) {
+            isVerified = true;
+          } else {
+            failureReason = "Invalid verification code. Please re-enter or request a fresh code.";
+          }
+        } else if (expiresAtMs && Date.now() > expiresAtMs) {
+          failureReason = "Verification code has expired. Please request a new code.";
         }
-      } catch {}
-
-      if (remaining <= 0) {
-        return NextResponse.json(
-          { error: "Maximum verification attempts exceeded. Please request a new code." },
-          { status: 429 }
-        );
+      } catch (tokenErr) {
+        console.warn("[OTP VERIFY] Cryptographic token verification notice:", tokenErr);
       }
-
-      return NextResponse.json(
-        { error: `Invalid verification code. ${remaining} attempt(s) remaining.` },
-        { status: 400 }
-      );
     }
 
-    // Mark challenge as single-use verified
-    try {
-      await updateOtpChallengeState(normalizedEmail, { used: true });
-    } catch {}
+    // 2. Fallback to Memory / Firestore Challenge Store if token was omitted or unverified
+    if (!isVerified) {
+      try {
+        const activeChallenge = await getActiveOtpChallenge(normalizedEmail);
+        if (activeChallenge) {
+          const { otpHash, expiresAt, used } = activeChallenge;
+          if (used) {
+            failureReason = "This verification code has already been used. Please request a fresh code.";
+          } else if (new Date(expiresAt) <= now) {
+            failureReason = "Verification code has expired. Please request a new code.";
+          } else {
+            const inputHash = crypto.createHash("sha256").update(cleanOtp).digest("hex");
+            if (inputHash === otpHash) {
+              isVerified = true;
+              try {
+                await updateOtpChallengeState(normalizedEmail, { used: true });
+              } catch {}
+            }
+          }
+        }
+      } catch (storeErr) {
+        console.warn("[OTP VERIFY] Memory/Firestore lookup notice:", storeErr);
+      }
+    }
 
-    // Provision or Retrieve Admin User in Firebase Auth
-    let userUid = "admin_" + crypto.createHash("md5").update(normalizedEmail).digest("hex").slice(0, 12);
-    let customToken = "";
+    if (!isVerified) {
+      return NextResponse.json({ error: failureReason }, { status: 400 });
+    }
 
+    // Provision User UID
+    const userUid = "admin_" + crypto.createHash("md5").update(normalizedEmail).digest("hex").slice(0, 12);
+    let customToken: string | null = null;
+
+    // Optional Firebase Admin Auth Claims (if configured)
     try {
-      if (adminAuth) {
+      const { getAdminAuth } = await import("@/lib/firebase-admin");
+      const auth = getAdminAuth();
+      if (auth) {
+        let userRecord;
         try {
-          const userRecord = await adminAuth.getUserByEmail(normalizedEmail);
-          userUid = userRecord.uid;
+          userRecord = await auth.getUserByEmail(normalizedEmail);
         } catch {
-          const newUser = await adminAuth.createUser({
+          userRecord = await auth.createUser({
             email: normalizedEmail,
             emailVerified: true,
             displayName: "AWENUE Administrator",
           });
-          userUid = newUser.uid;
         }
-        await adminAuth.setCustomUserClaims(userUid, { role: "admin", admin: true });
-        customToken = await adminAuth.createCustomToken(userUid, { role: "admin", admin: true });
+        await auth.setCustomUserClaims(userRecord.uid, { role: "admin", admin: true });
+        const token = await auth.createCustomToken(userRecord.uid, { role: "admin", admin: true });
+        if (token && token.split(".").length === 3) {
+          customToken = token;
+        }
       }
     } catch (authErr) {
-      console.warn("[OTP VERIFY] Firebase Admin Auth notice:", authErr);
+      console.warn("[OTP VERIFY] Firebase Admin Auth notice (proceeding with session):", authErr);
     }
 
-    // Create Audit Log (safely)
+    // Optional Audit Logging (if configured)
     try {
-      if (adminDb) {
-        await adminDb.collection("adminAuditLogs").add({
+      const { getAdminDb } = await import("@/lib/firebase-admin");
+      const db = getAdminDb();
+      if (db) {
+        await db.collection("adminAuditLogs").add({
           type: "ADMIN_LOGIN_SUCCESS",
           adminEmail: normalizedEmail,
           uid: userUid,
@@ -147,12 +134,12 @@ export async function POST(request: NextRequest) {
       console.warn("[OTP VERIFY] Audit log notice:", auditErr);
     }
 
-    // Create Response with Secure HttpOnly Session Cookie
+    // Create Response with Secure HttpOnly Session Cookie (1-Year Duration for Device Auto-Login)
     const response = NextResponse.json(
       {
         success: true,
         verified: true,
-        customToken: customToken && customToken.split(".").length === 3 ? customToken : null,
+        customToken,
         message: "OTP verified successfully.",
       },
       { status: 200 }
@@ -165,7 +152,7 @@ export async function POST(request: NextRequest) {
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
       path: "/",
-      maxAge: 60 * 60 * 24 * 365, // 1 year session duration
+      maxAge: 60 * 60 * 24 * 365, // 1 year session duration for persistent auto-login
     });
 
     return response;

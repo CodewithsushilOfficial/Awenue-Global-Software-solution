@@ -23,6 +23,7 @@ export default function AdminLoginPage() {
   const [step, setStep] = useState<"email" | "otp">("email");
   const [email, setEmail] = useState("");
   const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
+  const [challengeToken, setChallengeToken] = useState<string>("");
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -104,6 +105,10 @@ export default function AdminLoginPage() {
         throw new Error(result.data?.error || "Failed to request verification code. Please try again.");
       }
 
+      if (result.data?.challengeToken) {
+        setChallengeToken(result.data.challengeToken);
+      }
+
       setStep("otp");
       setOtpDigits(["", "", "", "", "", ""]);
       setCooldownSeconds(60);
@@ -131,12 +136,12 @@ export default function AdminLoginPage() {
 
     try {
       // Primary OTP Verification Endpoint
-      let result = await safeFetchJson("/api/admin/otp/verify", { email, otp: fullOtp });
+      let result = await safeFetchJson("/api/admin/otp/verify", { email, otp: fullOtp, challengeToken });
 
       // Secondary Fallback Endpoint
       if (!result.ok) {
         console.warn("Primary verify endpoint failed, attempting fallback endpoint...");
-        result = await safeFetchJson("/api/admin/verify-otp", { email, otpCode: fullOtp });
+        result = await safeFetchJson("/api/admin/verify-otp", { email, otpCode: fullOtp, challengeToken });
       }
 
       if (!result.ok) {
