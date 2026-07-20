@@ -3,6 +3,9 @@ import crypto from "crypto";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { sendAdminInviteEmail } from "@/lib/email";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 // GET: Retrieve list of all authorized admins
 export async function GET() {
   try {

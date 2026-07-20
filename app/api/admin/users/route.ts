@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 export async function GET() {
   try {
     // 1. Fetch users from Firestore 'users' collection

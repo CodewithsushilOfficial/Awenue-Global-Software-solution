@@ -55,6 +55,29 @@ export default function AdminLoginPage() {
     }
   }, [step]);
 
+  const safeFetchJson = async (url: string, bodyObj: Record<string, unknown>) => {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bodyObj),
+      });
+
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        const data = await res.json();
+        return { ok: res.ok, status: res.status, data };
+      } else {
+        const text = await res.text();
+        console.warn(`Non-JSON response from ${url} (${res.status}):`, text.slice(0, 200));
+        return { ok: false, status: res.status, data: { error: `Server response error (${res.status}).` } };
+      }
+    } catch (err) {
+      console.warn(`Fetch error for ${url}:`, err);
+      return { ok: false, status: 500, data: { error: "Network or server connection issue." } };
+    }
+  };
+
   // STEP 1: Request Email OTP Code
   const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,21 +91,23 @@ export default function AdminLoginPage() {
     setInfoMessage(null);
 
     try {
-      const res = await fetch("/api/admin/otp/request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
+      // Primary OTP Endpoint
+      let result = await safeFetchJson("/api/admin/otp/request", { email });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to request verification code.");
+      // Secondary Fallback Endpoint if primary fails or returns non-JSON/404
+      if (!result.ok && result.status !== 429) {
+        console.warn("Primary OTP endpoint failed, attempting fallback endpoint...");
+        result = await safeFetchJson("/api/admin/send-otp", { email });
+      }
+
+      if (!result.ok) {
+        throw new Error(result.data?.error || "Failed to request verification code. Please try again.");
       }
 
       setStep("otp");
       setOtpDigits(["", "", "", "", "", ""]);
       setCooldownSeconds(60);
-      setInfoMessage(data.message || "If this email is authorized, a verification code has been sent.");
+      setInfoMessage(result.data?.message || `A verification code has been sent to ${email}.`);
     } catch (err: unknown) {
       console.error("OTP Request error:", err);
       const message = err instanceof Error ? err.message : "An error occurred. Please try again.";
@@ -105,19 +130,21 @@ export default function AdminLoginPage() {
     setErrorMessage(null);
 
     try {
-      const res = await fetch("/api/admin/otp/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, otp: fullOtp }),
-      });
+      // Primary OTP Verification Endpoint
+      let result = await safeFetchJson("/api/admin/otp/verify", { email, otp: fullOtp });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Invalid verification code.");
+      // Secondary Fallback Endpoint
+      if (!result.ok) {
+        console.warn("Primary verify endpoint failed, attempting fallback endpoint...");
+        result = await safeFetchJson("/api/admin/verify-otp", { email, otpCode: fullOtp });
+      }
+
+      if (!result.ok) {
+        throw new Error(result.data?.error || "Invalid verification code.");
       }
 
       // Complete login with Custom Token & persist admin email for device auto-login
-      await loginWithCustomToken(data.customToken, email);
+      await loginWithCustomToken(result.data?.customToken, email);
       router.push("/admin/dashboard");
     } catch (err: unknown) {
       console.error("OTP Verification error:", err);
@@ -137,15 +164,13 @@ export default function AdminLoginPage() {
     setInfoMessage(null);
 
     try {
-      const res = await fetch("/api/admin/otp/request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
+      let result = await safeFetchJson("/api/admin/otp/request", { email });
+      if (!result.ok && result.status !== 429) {
+        result = await safeFetchJson("/api/admin/send-otp", { email });
+      }
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to resend verification code.");
+      if (!result.ok) {
+        throw new Error(result.data?.error || "Failed to resend verification code.");
       }
 
       setOtpDigits(["", "", "", "", "", ""]);

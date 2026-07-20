@@ -8,6 +8,9 @@ import {
 } from "@/lib/otp-store";
 import { adminDb } from "@/lib/firebase-admin";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 // Helper function to check if email is an authorized admin
 async function isAuthorizedAdminEmail(email: string): Promise<boolean> {
   const normalizedEmail = email.trim().toLowerCase();

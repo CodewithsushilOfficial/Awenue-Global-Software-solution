@@ -3,6 +3,9 @@ import crypto from "crypto";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { getActiveOtpChallenge, updateOtpChallengeState } from "@/lib/otp-store";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
