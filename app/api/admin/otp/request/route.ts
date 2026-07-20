@@ -113,16 +113,18 @@ export async function POST(request: NextRequest) {
     }
 
     // 7. Send OTP Email via Nodemailer
-    let messageSent = `Verification code sent to ${normalizedEmail}.`;
-    try {
-      const emailResult = await sendAdminOtpEmail(normalizedEmail, rawOtp);
-      if (!emailResult.success) {
-        console.error("[OTP REQUEST] Email delivery notice:", emailResult.error);
-      }
-    } catch (mailErr) {
-      console.error("[OTP REQUEST] Nodemailer notice:", mailErr);
+    const emailResult = await sendAdminOtpEmail(normalizedEmail, rawOtp);
+    if (!emailResult.success) {
+      console.error("[OTP REQUEST] Email delivery notice:", emailResult.error);
+      return NextResponse.json(
+        {
+          error: `Failed to send verification code email (${emailResult.error || "SMTP issue"}). Please try again or check email settings.`,
+        },
+        { status: 400 }
+      );
     }
 
+    const messageSent = `Verification code sent to ${normalizedEmail}.`;
     return NextResponse.json(
       {
         success: true,

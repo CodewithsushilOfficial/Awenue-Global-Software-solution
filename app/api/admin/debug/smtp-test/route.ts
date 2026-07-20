@@ -6,13 +6,13 @@
  * AUTOMATICALLY DISABLED IN PRODUCTION.
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   // Hard-block in production
   if (process.env.NODE_ENV === "production") {
     return NextResponse.json(

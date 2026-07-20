@@ -358,7 +358,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const now = new Date().toISOString();
-    let updateData: Record<string, unknown> = { updatedAt: now };
+    const updateData: Record<string, unknown> = { updatedAt: now };
     let logAction = "";
 
     switch (action) {

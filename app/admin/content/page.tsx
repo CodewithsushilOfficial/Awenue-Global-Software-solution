@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Save, Loader2, CheckCircle2, Sparkles, Phone, Mail, MapPin, Globe } from "lucide-react";
+import { Save, Loader2, CheckCircle2, Sparkles } from "lucide-react";
 
 interface ContentState {
   // Hero Section

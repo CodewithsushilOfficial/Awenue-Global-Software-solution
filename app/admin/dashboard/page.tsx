@@ -15,7 +15,6 @@ import {
   ArrowRight,
   Loader2,
   CheckCircle2,
-  Clock,
   Activity,
   Send,
 } from "lucide-react";
@@ -99,7 +98,6 @@ export default function AdminDashboardPage() {
 
   const [recentInquiries, setRecentInquiries] = useState<RecentInquiry[]>([]);
   const [recentConsultations, setRecentConsultations] = useState<RecentConsultation[]>([]);
-  const [recentUsers, setRecentUsers] = useState<RecentUser[]>([]);
   const [recentActivities, setRecentActivities] = useState<ActivityItem[]>([]);
 
   useEffect(() => {
@@ -176,13 +174,13 @@ export default function AdminDashboardPage() {
           const uData = await uRes.json();
           if (uRes.ok && Array.isArray(uData.users)) {
             usersCount = uData.users.length;
-            uData.users.slice(0, 5).forEach((u: any) => {
+            uData.users.slice(0, 5).forEach((u: { uid: string; fullName?: string; email: string; disabled?: boolean; createdAt?: string }) => {
               usersList.push({
                 id: u.uid,
                 fullName: u.fullName || "User Account",
                 email: u.email,
                 status: u.disabled ? "disabled" : "active",
-                createdAt: u.createdAt,
+                createdAt: u.createdAt || new Date().toISOString(),
               });
             });
           }
@@ -253,7 +251,6 @@ export default function AdminDashboardPage() {
         setPipeline(pipe);
         setRecentInquiries(inqList);
         setRecentConsultations(conList);
-        setRecentUsers(usersList);
         setRecentActivities(activities);
       } catch (err) {
         console.warn("Firestore dashboard load fallback:", err);

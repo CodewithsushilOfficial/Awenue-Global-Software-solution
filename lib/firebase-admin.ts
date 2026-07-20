@@ -102,23 +102,23 @@ export function getAdminAuth(): Auth | null {
 
 // Safe Proxy exports so top-level imports in Vercel serverless lambdas never fail
 export const adminDb = new Proxy({} as Firestore, {
-  get(_target, prop) {
+  get(_target, prop: string | symbol) {
     const instance = getAdminDb();
     if (!instance) {
       throw new Error("Firebase Admin Firestore is not available in current environment.");
     }
-    const val = (instance as any)[prop];
+    const val = (instance as unknown as Record<string | symbol, unknown>)[prop];
     return typeof val === "function" ? val.bind(instance) : val;
   },
 });
 
 export const adminAuth = new Proxy({} as Auth, {
-  get(_target, prop) {
+  get(_target, prop: string | symbol) {
     const instance = getAdminAuth();
     if (!instance) {
       throw new Error("Firebase Admin Auth is not available in current environment.");
     }
-    const val = (instance as any)[prop];
+    const val = (instance as unknown as Record<string | symbol, unknown>)[prop];
     return typeof val === "function" ? val.bind(instance) : val;
   },
 });

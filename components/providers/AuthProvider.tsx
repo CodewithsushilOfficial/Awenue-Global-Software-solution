@@ -73,8 +73,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Hydrate session on mount
   useEffect(() => {
-    fetchSession();
-  }, [fetchSession]);
+    let mounted = true;
+    const loadSession = async () => {
+      try {
+        const res = await fetch("/api/admin/auth/me", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        if (!mounted) return;
+
+        if (res.ok) {
+          const data = await res.json();
+          setAdmin({
+            adminId: data.adminId,
+            email: data.email,
+            role: data.role,
+            displayName: data.displayName,
+            status: data.status,
+          });
+        } else {
+          setAdmin(null);
+        }
+      } catch {
+        if (mounted) setAdmin(null);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    loadSession();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const refreshSession = useCallback(async () => {
     setLoading(true);

@@ -157,7 +157,7 @@ const SERVICES = [
 
 // ─── FLIP CARD ────────────────────────────────────────────────────────────────
 interface FlipCardProps {
-  service: typeof SERVICES[number];
+  service: ServiceItem;
   index: number;
   onCTA: () => void;
 }
@@ -553,17 +553,35 @@ function SectionHeader() {
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
+export interface ServiceItem {
+  id: string;
+  num: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  image: string;
+  color: string;
+  colorRgb: string;
+  colorClass: string;
+  badgeBg: string;
+  title: string;
+  subtitle: string;
+  desc: string;
+  features: readonly string[] | string[];
+  cta?: string;
+  modalKey?: string;
+  displayOrder?: number;
+}
+
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function Services() {
   const { openModal } = useModal();
-  const [servicesList, setServicesList] = useState<any[]>([...SERVICES]);
+  const [servicesList, setServicesList] = useState<ServiceItem[]>([...SERVICES]);
 
   useEffect(() => {
     async function loadServices() {
       try {
         const snap = await getDocs(collection(db, "services"));
         if (!snap.empty) {
-          const loaded: any[] = [];
+          const loaded: ServiceItem[] = [];
           snap.forEach((docSnap) => {
             const data = docSnap.data();
             if (data.published !== false) {

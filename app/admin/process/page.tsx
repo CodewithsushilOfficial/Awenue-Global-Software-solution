@@ -12,7 +12,6 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import {
-  Layers,
   Plus,
   Edit2,
   Trash2,
@@ -21,8 +20,6 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
-  MoveUp,
-  MoveDown,
 } from "lucide-react";
 
 interface ProcessStep {

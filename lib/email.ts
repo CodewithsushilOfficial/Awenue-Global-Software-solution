@@ -43,9 +43,9 @@ function createTransporter() {
         user: user.trim(),
         pass,
       },
-      connectionTimeout: 3500,
-      greetingTimeout: 3500,
-      socketTimeout: 3500,
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
     });
   }
 
@@ -60,9 +60,9 @@ function createTransporter() {
     tls: {
       rejectUnauthorized: false,
     },
-    connectionTimeout: 3500,
-    greetingTimeout: 3500,
-    socketTimeout: 3500,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
   });
 }
 
@@ -118,10 +118,10 @@ export async function sendAdminOtpEmail(email: string, otpCode: string): Promise
     });
 
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Email delivery socket timeout")), 3500)
+      setTimeout(() => reject(new Error("Email delivery socket timeout")), 10000)
     );
 
-    const info = (await Promise.race([sendPromise, timeoutPromise])) as any;
+    const info = (await Promise.race([sendPromise, timeoutPromise])) as nodemailer.SentMessageInfo;
 
     console.log(`[Nodemailer] Admin OTP email sent successfully to ${email}. MessageID:`, info?.messageId);
 
@@ -433,10 +433,10 @@ export async function sendAdminInviteEmail(
     });
 
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Email delivery timeout")), 4500)
+      setTimeout(() => reject(new Error("Email delivery timeout")), 10000)
     );
 
-    const info = (await Promise.race([sendPromise, timeoutPromise])) as any;
+    const info = (await Promise.race([sendPromise, timeoutPromise])) as nodemailer.SentMessageInfo;
     console.log(`[Nodemailer] Admin invite email sent to ${data.recipientEmail}. MessageID:`, info?.messageId);
 
     return { success: true };

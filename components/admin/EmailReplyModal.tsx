@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { X, Send, Mail, Loader2, Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
 
 interface EmailReplyModalProps {
@@ -24,11 +24,6 @@ export default function EmailReplyModal({
   defaultSubject,
   onSuccess,
 }: EmailReplyModalProps) {
-  const [subject, setSubject] = useState("");
-  const [message, setMessage] = useState("");
-  const [sending, setSending] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
   // Template generators
   const getInitialResponseTemplate = (name: string) =>
     `Hi ${name || "there"},\n\nThank you for contacting AWENUE.\n\nWe've reviewed your request and would be happy to discuss your requirements in more detail.\n\nPlease let us know a convenient time to connect.\n\nBest regards,\nAWENUE Team\nAvenue Global Software Solutions`;
@@ -39,28 +34,35 @@ export default function EmailReplyModal({
   const getConsultationFollowUpTemplate = (name: string) =>
     `Hi ${name || "there"},\n\nThank you for your interest in a consultation with AWENUE.\n\nWe'd be happy to understand your requirements and explore how we can help your business grow.\n\nPlease let us know a suitable time to connect.\n\nBest regards,\nAWENUE Team\nAvenue Global Software Solutions`;
 
-  useEffect(() => {
+  const getInitialSubject = () =>
+    defaultSubject ||
+    (leadType === "projectInquiry"
+      ? `Regarding Your Project Inquiry — AWENUE`
+      : leadType === "consultation"
+      ? `Free Consultation Follow-Up — AWENUE`
+      : `Response to Your Query — AWENUE`);
+
+  const getInitialMsg = () =>
+    leadType === "projectInquiry"
+      ? getProjectDiscussionTemplate(customerName)
+      : leadType === "consultation"
+      ? getConsultationFollowUpTemplate(customerName)
+      : getInitialResponseTemplate(customerName);
+
+  const [subject, setSubject] = useState(getInitialSubject);
+  const [message, setMessage] = useState(getInitialMsg);
+  const [sending, setSending] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const [prevOpen, setPrevOpen] = useState(isOpen);
+  if (isOpen !== prevOpen) {
+    setPrevOpen(isOpen);
     if (isOpen) {
+      setSubject(getInitialSubject());
+      setMessage(getInitialMsg());
       setFeedback(null);
-      const initialSub =
-        defaultSubject ||
-        (leadType === "projectInquiry"
-          ? `Regarding Your Project Inquiry — AWENUE`
-          : leadType === "consultation"
-          ? `Free Consultation Follow-Up — AWENUE`
-          : `Response to Your Query — AWENUE`);
-
-      setSubject(initialSub);
-
-      if (leadType === "projectInquiry") {
-        setMessage(getProjectDiscussionTemplate(customerName));
-      } else if (leadType === "consultation") {
-        setMessage(getConsultationFollowUpTemplate(customerName));
-      } else {
-        setMessage(getInitialResponseTemplate(customerName));
-      }
     }
-  }, [isOpen, customerName, leadType, defaultSubject]);
+  }
 
   if (!isOpen) return null;
 

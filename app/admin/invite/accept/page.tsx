@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ShieldCheck, Loader2, CheckCircle2, AlertCircle, ArrowRight } from "lucide-react";
@@ -13,17 +13,15 @@ function AcceptInvitationContent() {
   const token = searchParams.get("token") || "";
   const invitationId = searchParams.get("invitation") || "";
 
+  const isInvalidLink = !token || !invitationId;
   const [status, setStatus] = useState<"loading" | "success" | "error" | "idle">("idle");
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Validate params on mount
-  useEffect(() => {
-    if (!token || !invitationId) {
-      setStatus("error");
-      setMessage("Invalid invitation link. Token or invitation ID is missing. Please use the exact link from your email.");
-    }
-  }, [token, invitationId]);
+  const effectiveStatus = isInvalidLink ? "error" : status;
+  const effectiveMessage = isInvalidLink
+    ? "Invalid invitation link. Token or invitation ID is missing. Please use the exact link from your email."
+    : message;
 
   const handleAccept = async () => {
     if (!token || !invitationId || isSubmitting) return;
@@ -86,29 +84,29 @@ function AcceptInvitationContent() {
         </div>
 
         {/* Status Messages */}
-        {status === "success" && (
+        {effectiveStatus === "success" && (
           <div className="mb-6 p-4 bg-accent/10 border border-accent/30 rounded-xl text-accent text-sm flex items-start gap-3">
             <CheckCircle2 size={18} className="shrink-0 mt-0.5" />
             <div>
               <p className="font-bold mb-1">Account Activated!</p>
-              <p className="text-xs text-accent/80">{message}</p>
+              <p className="text-xs text-accent/80">{effectiveMessage}</p>
               <p className="text-xs text-accent/60 mt-2">Redirecting to login page...</p>
             </div>
           </div>
         )}
 
-        {status === "error" && (
+        {effectiveStatus === "error" && (
           <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-sm flex items-start gap-3">
             <AlertCircle size={18} className="shrink-0 mt-0.5" />
             <div>
               <p className="font-bold mb-1">Activation Failed</p>
-              <p className="text-xs text-rose-300/80">{message}</p>
+              <p className="text-xs text-rose-300/80">{effectiveMessage}</p>
             </div>
           </div>
         )}
 
         {/* What Happens */}
-        {status === "idle" && token && invitationId && (
+        {effectiveStatus === "idle" && token && invitationId && (
           <div className="mb-6 p-4 bg-surface-base rounded-xl border border-white/10 space-y-2.5">
             <p className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-2">
               Activation Steps
@@ -129,13 +127,13 @@ function AcceptInvitationContent() {
         )}
 
         {/* Action Button */}
-        {status !== "success" && (
+        {effectiveStatus !== "success" && (
           <button
             onClick={handleAccept}
-            disabled={isSubmitting || !token || !invitationId || status === "loading"}
+            disabled={isSubmitting || !token || !invitationId || effectiveStatus === "loading"}
             className="w-full bg-accent text-surface-base font-extrabold py-3.5 rounded-xl hover:bg-accent-hover transition-colors flex items-center justify-center gap-2 shadow-glow disabled:opacity-50"
           >
-            {status === "loading" ? (
+            {effectiveStatus === "loading" ? (
               <>
                 <Loader2 className="animate-spin" size={18} />
                 Activating Account...

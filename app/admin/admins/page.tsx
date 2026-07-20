@@ -8,7 +8,6 @@ import {
   ShieldCheck,
   Clock,
   XCircle,
-  MoreHorizontal,
   Mail,
   Loader2,
   CheckCircle2,
@@ -124,8 +123,37 @@ export default function AdminManagementPage() {
   }, []);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    let mounted = true;
+    const loadData = async () => {
+      try {
+        const res = await fetch("/api/admin/invite", { credentials: "include" });
+        if (!mounted) return;
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          throw new Error(d.error || "Failed to load admin data.");
+        }
+        const data = await res.json();
+        if (mounted) {
+          setAdmins(data.admins || []);
+          setPendingInvitations(data.pendingInvitations || []);
+        }
+      } catch (err) {
+        if (mounted) {
+          setError(err instanceof Error ? err.message : "Failed to load data.");
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadData();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // ── Invite new admin ──
   const handleInvite = async (e: React.FormEvent) => {

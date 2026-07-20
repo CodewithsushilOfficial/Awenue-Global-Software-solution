@@ -57,7 +57,7 @@ export default function InviteAdminModal({ isOpen, onClose, onSuccess }: InviteA
         });
 
         const text = await res.text();
-        let data: any = {};
+        let data: Record<string, unknown> = {};
         try {
           data = JSON.parse(text);
         } catch {
@@ -66,7 +66,7 @@ export default function InviteAdminModal({ isOpen, onClose, onSuccess }: InviteA
 
         if (res.ok && data.success) {
           apiSuccess = true;
-        } else if (data.error) {
+        } else if (typeof data.error === "string") {
           apiErrorMsg = data.error;
         }
       } catch (apiErr) {

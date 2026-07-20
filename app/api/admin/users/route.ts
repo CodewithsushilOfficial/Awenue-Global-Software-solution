@@ -8,14 +8,14 @@ export async function GET() {
   try {
     // 1. Fetch users from Firestore 'users' collection
     const usersSnap = await adminDb.collection("users").get();
-    const usersMap = new Map<string, any>();
+    const usersMap = new Map<string, Record<string, unknown>>();
 
     usersSnap.forEach((docSnap) => {
       usersMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() });
     });
 
     // 2. Fetch users from Firebase Auth listUsers
-    let authUsers: any[] = [];
+    let authUsers: Record<string, unknown>[] = [];
     try {
       const listUsersResult = await adminAuth.listUsers(100);
       authUsers = listUsersResult.users.map((userRecord) => {
