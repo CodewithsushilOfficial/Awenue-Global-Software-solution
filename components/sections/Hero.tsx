@@ -12,34 +12,34 @@ import { db } from "@/lib/firebase";
 // ─── HERO SLIDE DATA ──────────────────────────────────────────────────────────
 const heroSlides = [
   {
-    src: "/hero-dev-team.png",
-    alt: "AWENUE developer team working in emerald green themed dark tech studio",
+    src: "/images/hero/scene-01-business.jpg",
+    alt: "Visionary entrepreneur in a modern tech office with analytics dashboard",
     kenBurns: "ken-zoom-in",
-    label: "Software Development",
+    label: "Digital Vision",
   },
   {
-    src: "/hero-ai-workflow.png",
-    alt: "AI and automation workflow development at AWENUE",
+    src: "/images/hero/scene-02-webdev.jpg",
+    alt: "Premium website design interface on a MacBook in a dark studio",
     kenBurns: "ken-pan-right",
+    label: "Web Development",
+  },
+  {
+    src: "/images/hero/scene-03-mobile.jpg",
+    alt: "Sleek Android and iOS mobile apps in a dark studio",
+    kenBurns: "ken-pan-left",
+    label: "Mobile Apps",
+  },
+  {
+    src: "/images/hero/scene-04-ai.jpg",
+    alt: "AI automation workflow with glowing connected nodes",
+    kenBurns: "ken-zoom-out",
     label: "AI Automation",
   },
   {
-    src: "/hero-mobile-green.png",
-    alt: "Android app development with AWENUE — Kotlin and modern mobile UI",
-    kenBurns: "ken-pan-left",
-    label: "Android Development",
-  },
-  {
-    src: "/hero-growth-green.png",
-    alt: "Business growth analytics dashboard with emerald green KPIs",
-    kenBurns: "ken-zoom-out",
-    label: "Business Growth",
-  },
-  {
-    src: "/hero-consultation.png",
-    alt: "AWENUE developer consultation and digital strategy session",
+    src: "/images/hero/scene-05-growth.jpg",
+    alt: "Business command center with growth analytics dashboards",
     kenBurns: "ken-zoom-in-top",
-    label: "Expert Consultation",
+    label: "Business Growth",
   },
 ] as const;
 
