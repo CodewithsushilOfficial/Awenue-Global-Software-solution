@@ -64,22 +64,31 @@ function getEnvAdmin(normalizedEmail: string): AdminRecord | null {
 
 /**
  * Look up an active admin by normalized email.
- * Falls back to ENV-configured admin if Firestore is unavailable.
+ * Falls back to ENV-configured admin if Firestore is unavailable or slow.
  */
 export async function getActiveAdminByEmail(
   email: string
 ): Promise<AdminRecord | null> {
   const normalizedEmail = email.trim().toLowerCase();
 
-  // ── 1. Try Firestore first ──────────────────────────────────
+  // ── 1. Try Firestore first (with 2.5s safety timeout) ──────
   try {
     const db = getAdminDb();
     if (db) {
-      const snap = await db
+      const dbQueryPromise = db
         .collection("admins")
         .where("emailNormalized", "==", normalizedEmail)
         .limit(1)
         .get();
+
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Firestore lookup timeout")), 2500)
+      );
+
+      const snap = (await Promise.race([
+        dbQueryPromise,
+        timeoutPromise,
+      ])) as FirebaseFirestore.QuerySnapshot;
 
       if (!snap.empty) {
         const doc = snap.docs[0];
@@ -119,7 +128,6 @@ export async function getActiveAdminByEmail(
         };
       }
 
-      // Admin not in Firestore — check ENV fallback
       console.warn(
         `[ADMIN AUTH] ${normalizedEmail} not found in Firestore admins collection.`
       );
@@ -129,7 +137,7 @@ export async function getActiveAdminByEmail(
       );
     }
   } catch (err) {
-    console.error("[ADMIN AUTH] Firestore lookup error:", err);
+    console.warn("[ADMIN AUTH] Firestore lookup notice:", err);
     // Fall through to ENV fallback
   }
 
@@ -137,7 +145,7 @@ export async function getActiveAdminByEmail(
   const envAdmin = getEnvAdmin(normalizedEmail);
   if (envAdmin) {
     console.log(
-      `[ADMIN AUTH] ENV fallback: ${normalizedEmail} matched ADMIN_EMAIL — granting super_admin access. Run bootstrap script to persist this admin to Firestore.`
+      `[ADMIN AUTH] ENV fallback: ${normalizedEmail} matched ADMIN_EMAIL — granting super_admin access.`
     );
     return envAdmin;
   }
@@ -166,7 +174,16 @@ export async function getAdminById(
     const db = getAdminDb();
     if (!db) return null;
 
-    const doc = await db.collection("admins").doc(adminId).get();
+    const dbQueryPromise = db.collection("admins").doc(adminId).get();
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Firestore lookup timeout")), 2500)
+    );
+
+    const doc = (await Promise.race([
+      dbQueryPromise,
+      timeoutPromise,
+    ])) as FirebaseFirestore.DocumentSnapshot;
+
     if (!doc.exists) return null;
 
     const data = doc.data()!;
@@ -190,7 +207,14 @@ export async function getAdminById(
       updatedAt: data.updatedAt,
     };
   } catch (err) {
-    console.error("[ADMIN AUTH] getAdminById error:", err);
+    console.warn("[ADMIN AUTH] getAdminById notice:", err);
+    // Fallback to ENV admin if ID matches
+    const envEmail = (
+      process.env.ADMIN_EMAIL ||
+      process.env.NEXT_PUBLIC_ADMIN_EMAIL ||
+      ""
+    ).trim().toLowerCase();
+    if (envEmail) return getEnvAdmin(envEmail);
     return null;
   }
 }
@@ -235,7 +259,7 @@ export async function updateLastLogin(adminId: string): Promise<void> {
       lastLoginAt: new Date().toISOString(),
     });
   } catch (err) {
-    console.warn("[ADMIN AUTH] updateLastLogin failed:", err);
+    console.warn("[ADMIN AUTH] updateLastLogin notice:", err);
   }
 }
 
@@ -249,7 +273,6 @@ export async function logAdminActivity(params: {
   try {
     const db = getAdminDb();
     if (!db) {
-      // Log to console when Firestore not available
       console.log("[AUDIT]", params.action, params.metadata || "");
       return;
     }
@@ -261,7 +284,7 @@ export async function logAdminActivity(params: {
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
-    console.warn("[ADMIN AUTH] logAdminActivity failed:", err);
+    console.warn("[ADMIN AUTH] logAdminActivity notice:", err);
   }
 }
 

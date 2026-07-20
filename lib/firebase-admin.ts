@@ -26,7 +26,15 @@ export function getAdminApp(): App | null {
       rawPrivateKey.includes("BEGIN PRIVATE KEY") &&
       !rawPrivateKey.includes("YOUR_PRIVATE_KEY_HERE");
 
-    if (projectId && clientEmail && isValidPrivateKey) {
+    const hasValidClientEmail =
+      clientEmail &&
+      clientEmail.includes("@") &&
+      !clientEmail.includes("xxxxx");
+
+    // Only initialize Admin SDK if valid service account credentials are provided.
+    // Initializing without credentials on Vercel/non-GCP environments causes
+    // Firestore queries to hang waiting for the GCP metadata server, resulting in 500 timeouts.
+    if (projectId && hasValidClientEmail && isValidPrivateKey) {
       try {
         const privateKey = rawPrivateKey.trim().replace(/^["']|["']$/g, "").replace(/\\n/g, "\n");
         adminApp = initializeApp({
@@ -36,14 +44,15 @@ export function getAdminApp(): App | null {
             privateKey,
           }),
         });
+        return adminApp;
       } catch (err) {
         console.warn("[Firebase Admin] Service account cert init failed:", err);
-        adminApp = initializeApp({ projectId });
+        return null;
       }
-    } else {
-      adminApp = initializeApp({ projectId });
     }
-    return adminApp;
+
+    console.warn("[Firebase Admin] No valid service account credentials found. Server-side Admin SDK is inactive (ENV fallback active).");
+    return null;
   } catch (err) {
     console.warn("[Firebase Admin] App init exception:", err);
     return null;
