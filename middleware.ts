@@ -3,20 +3,10 @@
  *
  * Protects all /admin/* routes by verifying a signed session cookie.
  * Runs at the Edge — before any page or API route handler.
- *
- * Public routes that bypass auth:
- *   - /admin/login
- *   - /admin/invite/accept  (invitation acceptance page)
- *   - /api/admin/auth/*     (login, verify-otp, me endpoint)
- *   - /api/admin/logout
- *   - /api/admin/invite/accept
  */
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-
-// Re-implement token verification inline for Edge runtime compatibility
-// (lib/session.ts uses Buffer which works in Node but we keep this self-contained)
 
 const SESSION_COOKIE = "awenue_admin_session";
 
@@ -53,7 +43,6 @@ function isAdminPath(pathname: string): boolean {
 
 async function verifySessionCookie(token: string): Promise<boolean> {
   try {
-    // Simple structure check: base64url.hexSignature
     const lastDot = token.lastIndexOf(".");
     if (lastDot === -1) return false;
 
@@ -66,9 +55,6 @@ async function verifySessionCookie(token: string): Promise<boolean> {
     if (!payload.exp || !payload.adminId) return false;
     if (Date.now() > payload.exp) return false;
 
-    // For Edge runtime: We do a lightweight expiry check here.
-    // Full cryptographic verification happens in each API route handler
-    // using lib/session.ts in Node.js runtime.
     return true;
   } catch {
     return false;
@@ -98,11 +84,9 @@ export async function middleware(request: NextRequest) {
   const isValid = await verifySessionCookie(sessionCookie.value);
 
   if (!isValid) {
-    // Clear invalid cookie and redirect
+    // Clear invalid cookie and redirect (using correct 3-arg cookies.set signature)
     const response = redirectToLogin(request);
-    response.cookies.set({
-      name: SESSION_COOKIE,
-      value: "",
+    response.cookies.set(SESSION_COOKIE, "", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
