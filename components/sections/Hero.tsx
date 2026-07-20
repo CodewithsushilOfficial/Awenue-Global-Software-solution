@@ -12,8 +12,8 @@ import { db } from "@/lib/firebase";
 // ─── HERO SLIDE DATA ──────────────────────────────────────────────────────────
 const heroSlides = [
   {
-    src: "/hero-web-dev-green.png",
-    alt: "AWENUE developer team working with emerald green themed tech studio",
+    src: "/hero-dev-team.png",
+    alt: "AWENUE developer team working in emerald green themed dark tech studio",
     kenBurns: "ken-zoom-in",
     label: "Software Development",
   },
