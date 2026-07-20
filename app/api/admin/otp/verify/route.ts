@@ -8,8 +8,15 @@ export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { email, otp } = body;
+    let email = "";
+    let otp = "";
+    try {
+      const body = await request.json();
+      email = body.email || "";
+      otp = body.otp || body.otpCode || "";
+    } catch {
+      return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+    }
 
     if (!email || !otp || typeof otp !== "string" || !/^\d{6}$/.test(otp.trim())) {
       return NextResponse.json(
@@ -24,54 +31,67 @@ export async function POST(request: NextRequest) {
     const now = new Date();
     const nowISO = now.toISOString();
 
-    // Retrieve active challenge from Hybrid OTP Store (Memory + Firestore)
-    const activeChallenge = await getActiveOtpChallenge(normalizedEmail);
+    // 1. Retrieve active challenge from Hybrid OTP Store (Memory + Firestore)
+    let activeChallenge = null;
+    try {
+      activeChallenge = await getActiveOtpChallenge(normalizedEmail);
+    } catch (getErr) {
+      console.warn("Active OTP challenge lookup notice:", getErr);
+    }
 
     if (!activeChallenge) {
       return NextResponse.json(
-        { error: "No active verification request found for this email. Please request a code." },
+        { error: "No active verification request found. Please request a new code." },
         { status: 400 }
       );
     }
 
     const { otpHash, expiresAt, attempts = 0, maxAttempts = 5, used } = activeChallenge;
 
-    // 0. Check if already used or superseded
+    // Check if already used
     if (used) {
       return NextResponse.json(
-        { error: "This verification code has already been used or superseded. Please request a fresh code." },
+        { error: "This verification code has already been used. Please request a fresh code." },
         { status: 400 }
       );
     }
 
-    // 1. Check max verification attempts (Brute-force lockout)
+    // Check max verification attempts
     if (attempts >= maxAttempts) {
-      await updateOtpChallengeState(normalizedEmail, { used: true });
+      try {
+        await updateOtpChallengeState(normalizedEmail, { used: true });
+      } catch {}
       return NextResponse.json(
-        { error: "Maximum verification attempts exceeded. Please request a new verification code." },
+        { error: "Maximum verification attempts exceeded. Please request a new code." },
         { status: 429 }
       );
     }
 
-    // 2. Check 5-minute expiration timestamp
+    // Check 10-minute expiration
     if (new Date(expiresAt) <= now) {
-      await updateOtpChallengeState(normalizedEmail, { used: true });
+      try {
+        await updateOtpChallengeState(normalizedEmail, { used: true });
+      } catch {}
       return NextResponse.json(
-        { error: "Verification code has expired (valid for 5 minutes). Please request a new code." },
+        { error: "Verification code has expired. Please request a new code." },
         { status: 400 }
       );
     }
 
-    // 3. Verify OTP SHA-256 Hash
+    // Verify OTP SHA-256 Hash
     if (inputHash !== otpHash) {
       const newAttempts = attempts + 1;
       const remaining = maxAttempts - newAttempts;
-      await updateOtpChallengeState(normalizedEmail, { attempts: newAttempts });
+      try {
+        await updateOtpChallengeState(normalizedEmail, { attempts: newAttempts });
+        if (remaining <= 0) {
+          await updateOtpChallengeState(normalizedEmail, { used: true });
+        }
+      } catch {}
 
       if (remaining <= 0) {
-        await updateOtpChallengeState(normalizedEmail, { used: true });
         return NextResponse.json(
-          { error: "Maximum verification attempts exceeded. Please request a new verification code." },
+          { error: "Maximum verification attempts exceeded. Please request a new code." },
           { status: 429 }
         );
       }
@@ -82,11 +102,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Mark challenge doc as single-use verified
-    await updateOtpChallengeState(normalizedEmail, { used: true });
+    // Mark challenge as single-use verified
+    try {
+      await updateOtpChallengeState(normalizedEmail, { used: true });
+    } catch {}
 
-    // 5. Retrieve or Provision Admin User in Firebase Auth
+    // Provision or Retrieve Admin User in Firebase Auth
     let userUid = "admin_" + crypto.createHash("md5").update(normalizedEmail).digest("hex").slice(0, 12);
+    let customToken = "";
+
     try {
       if (adminAuth) {
         try {
@@ -101,39 +125,29 @@ export async function POST(request: NextRequest) {
           userUid = newUser.uid;
         }
         await adminAuth.setCustomUserClaims(userUid, { role: "admin", admin: true });
+        customToken = await adminAuth.createCustomToken(userUid, { role: "admin", admin: true });
       }
     } catch (authErr) {
-      console.warn("[OTP VERIFY] Firebase Admin Auth provision skipped:", authErr);
+      console.warn("[OTP VERIFY] Firebase Admin Auth notice:", authErr);
     }
 
-    // 6. Generate Firebase Custom Auth Token or fallback token
-    let customToken = "";
+    // Create Audit Log (safely)
     try {
-      if (adminAuth) {
-        customToken = await adminAuth.createCustomToken(userUid, {
-          role: "admin",
-          admin: true,
+      if (adminDb) {
+        await adminDb.collection("adminAuditLogs").add({
+          type: "ADMIN_LOGIN_SUCCESS",
+          adminEmail: normalizedEmail,
+          uid: userUid,
+          ip: request.headers.get("x-forwarded-for") || "unknown",
+          userAgent: request.headers.get("user-agent") || "unknown",
+          createdAt: nowISO,
         });
       }
-    } catch (tokErr) {
-      console.warn("[OTP VERIFY] Custom token generation skipped:", tokErr);
-    }
-
-    // 7. Create Audit Log
-    try {
-      await adminDb.collection("adminAuditLogs").add({
-        type: "ADMIN_LOGIN_SUCCESS",
-        adminEmail: normalizedEmail,
-        uid: userUid,
-        ip: request.headers.get("x-forwarded-for") || "unknown",
-        userAgent: request.headers.get("user-agent") || "unknown",
-        createdAt: nowISO,
-      });
     } catch (auditErr) {
-      console.warn("[OTP VERIFY] Audit log write skipped:", auditErr);
+      console.warn("[OTP VERIFY] Audit log notice:", auditErr);
     }
 
-    // 8. Create Response with Secure HttpOnly Session Cookie
+    // Create Response with Secure HttpOnly Session Cookie
     const response = NextResponse.json(
       {
         success: true,
@@ -144,7 +158,6 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
 
-    // Set secure HttpOnly session cookie
     response.cookies.set({
       name: "awenue_admin_session",
       value: `verified_${userUid}_${Date.now()}`,
@@ -152,7 +165,7 @@ export async function POST(request: NextRequest) {
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
       path: "/",
-      maxAge: 60 * 60 * 24 * 365, // 1 year auto-login session on device
+      maxAge: 60 * 60 * 24 * 365, // 1 year session duration
     });
 
     return response;
@@ -161,7 +174,7 @@ export async function POST(request: NextRequest) {
     console.error("API /api/admin/otp/verify error:", errorDetails);
     return NextResponse.json(
       { error: errorDetails || "An error occurred during verification." },
-      { status: 500 }
+      { status: 400 }
     );
   }
 }
