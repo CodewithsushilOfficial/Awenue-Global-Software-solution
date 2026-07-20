@@ -406,7 +406,7 @@ export async function sendAdminInviteEmail(
 
     const text = `Administrator Invitation\n\nYou have been invited to join the AWENUE Admin Portal.\n\nAuthorized Email: ${data.recipientEmail}\nSystem Access Level: ${data.role || "Administrator"}\n\nSign in at: ${loginUrl}\n\n— AWENUE Admin Team`;
 
-    const info = await transporter.sendMail({
+    const sendPromise = transporter.sendMail({
       from: fromEmail,
       to: data.recipientEmail,
       subject,
@@ -414,12 +414,17 @@ export async function sendAdminInviteEmail(
       html,
     });
 
-    console.log(`[Nodemailer] Admin invite email sent to ${data.recipientEmail}. MessageID:`, info.messageId);
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Email delivery timeout")), 4500)
+    );
+
+    const info = (await Promise.race([sendPromise, timeoutPromise])) as any;
+    console.log(`[Nodemailer] Admin invite email sent to ${data.recipientEmail}. MessageID:`, info?.messageId);
 
     return { success: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Email delivery failed";
-    console.error("[Nodemailer] Failed to send admin invite email:", err);
+    console.warn("[Nodemailer] Admin invite email delivery notice:", message);
     return { success: false, error: message };
   }
 }
