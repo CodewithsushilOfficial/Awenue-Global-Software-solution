@@ -28,14 +28,16 @@ const OTP_SECRET_KEY =
 // OTP valid for 5 minutes
 const OTP_TTL_MS = 5 * 60 * 1000;
 
-// Generic response to prevent admin email enumeration
-const GENERIC_RESPONSE = NextResponse.json(
-  {
-    success: true,
-    message: "If this email is authorized, a verification code has been sent.",
-  },
-  { status: 200 }
-);
+// Helper to create a fresh generic response (avoids stream reuse bugs in serverless lambdas)
+function createGenericResponse() {
+  return NextResponse.json(
+    {
+      success: true,
+      message: "If this email is authorized, a verification code has been sent.",
+    },
+    { status: 200 }
+  );
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -63,12 +65,12 @@ export async function POST(request: NextRequest) {
     } catch (err) {
       console.error("[OTP REQUEST] Admin lookup error:", err);
       // On error, return generic response (fail-closed)
-      return GENERIC_RESPONSE;
+      return createGenericResponse();
     }
 
     if (!admin) {
       // Return generic response — do NOT reveal that email is unregistered
-      return GENERIC_RESPONSE;
+      return createGenericResponse();
     }
 
     // 2. Enforce 60-second resend cooldown
@@ -123,7 +125,6 @@ export async function POST(request: NextRequest) {
       const emailResult = await sendAdminOtpEmail(normalizedEmail, rawOtp);
       if (!emailResult.success) {
         console.error("[OTP REQUEST] Email delivery failed:", emailResult.error);
-        // In development only, surface the error for debugging
         if (process.env.NODE_ENV !== "production") {
           messageSent = `Dev mode: OTP generated. Email delivery notice: ${emailResult.error || "SMTP not configured"}`;
         }
