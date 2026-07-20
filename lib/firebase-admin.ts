@@ -23,11 +23,13 @@ export function getAdminApp(): App | null {
 
     const isValidPrivateKey =
       rawPrivateKey &&
+      typeof rawPrivateKey === "string" &&
       rawPrivateKey.includes("BEGIN PRIVATE KEY") &&
       !rawPrivateKey.includes("YOUR_PRIVATE_KEY_HERE");
 
     const hasValidClientEmail =
       clientEmail &&
+      typeof clientEmail === "string" &&
       clientEmail.includes("@") &&
       !clientEmail.includes("xxxxx");
 
@@ -110,4 +112,4 @@ export const adminAuth = new Proxy({} as Auth, {
   },
 });
 
-export default getAdminApp();
+export default getAdminApp;
