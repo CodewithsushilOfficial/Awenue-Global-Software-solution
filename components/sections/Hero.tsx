@@ -146,62 +146,42 @@ export default function Hero() {
     >
       {/* ─── SLIDESHOW BACKGROUND ────────────────────────────────────────── */}
       <div className="absolute inset-0" aria-hidden="true">
-        <AnimatePresence>
-          {heroSlides.map((slide, idx) =>
-            idx === current ? (
-              <motion.div
-                key={idx}
-                className="absolute inset-0 overflow-hidden"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{
-                  duration: TRANSITION_DURATION / 1000,
-                  ease: "easeInOut",
-                }}
+        {heroSlides.map((slide, idx) => {
+          const isActive = idx === current;
+          return (
+            <div
+              key={idx}
+              className={`absolute inset-0 overflow-hidden transition-opacity duration-1000 ease-in-out ${
+                isActive ? "opacity-100 z-0" : "opacity-0 -z-10 pointer-events-none"
+              }`}
+            >
+              <div
+                className="absolute inset-0 w-full h-full"
+                style={
+                  prefersReducedMotion
+                    ? {}
+                    : {
+                        animation: isActive
+                          ? `${slide.kenBurns} ${(SLIDE_DURATION + TRANSITION_DURATION) / 1000}s ease-in-out forwards`
+                          : "none",
+                        willChange: "transform",
+                      }
+                }
               >
-                <div
-                  className="absolute inset-0 w-full h-full"
-                  style={
-                    prefersReducedMotion
-                      ? {}
-                      : {
-                          animation: `${slide.kenBurns} ${
-                            (SLIDE_DURATION + TRANSITION_DURATION) / 1000
-                          }s ease-in-out forwards`,
-                          willChange: "transform",
-                        }
-                  }
-                >
-                  <Image
-                    src={slide.src}
-                    alt={slide.alt}
-                    fill
-                    sizes="100vw"
-                    priority={idx === 0}
-                    quality={85}
-                    className="object-cover object-right"
-                    draggable={false}
-                  />
-                </div>
-              </motion.div>
-            ) : null
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* Preload hero images for instant sub-10ms slide transitions */}
-      <div className="hidden" aria-hidden="true">
-        {heroSlides.slice(1).map((slide, idx) => (
-          <Image
-            key={idx}
-            src={slide.src}
-            alt=""
-            width={1}
-            height={1}
-            priority
-          />
-        ))}
+                <Image
+                  src={slide.src}
+                  alt={slide.alt}
+                  fill
+                  sizes="100vw"
+                  priority={true}
+                  quality={90}
+                  className="object-cover object-right"
+                  draggable={false}
+                />
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* ─── OVERLAY SYSTEM ──────────────────────────────────────────────── */}
