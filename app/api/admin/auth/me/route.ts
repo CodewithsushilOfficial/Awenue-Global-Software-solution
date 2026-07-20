@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
         adminId: admin.id,
         email: admin.email,
         role: admin.role,
+        permissions: admin.permissions || [],
         displayName: admin.displayName,
         status: admin.status,
       },

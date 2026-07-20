@@ -22,6 +22,7 @@ export interface AdminUser {
   adminId: string;
   email: string;
   role: string;
+  permissions?: string[];
   displayName: string;
   status?: string;
 }

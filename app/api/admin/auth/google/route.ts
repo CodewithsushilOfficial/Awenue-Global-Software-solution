@@ -34,14 +34,14 @@ export async function POST(request: NextRequest) {
     // 1. Authorize Google Admin via Firebase Admin SDK & Firestore
     const authResult = await authorizeGoogleAdmin(idToken.trim());
 
-    if (!authResult.authorized) {
+    if (!authResult.authorized || !authResult.admin) {
       return NextResponse.json(
-        { error: authResult.error },
+        { error: authResult.error || "Authentication failed." },
         { status: 403 }
       );
     }
 
-    const { admin } = authResult;
+    const admin = authResult.admin;
 
     // 2. Create signed HttpOnly session token
     const sessionToken = createSessionToken({

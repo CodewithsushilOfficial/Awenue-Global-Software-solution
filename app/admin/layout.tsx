@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { hasPermission, Permission, AdminRole } from "@/lib/rbac";
 import {
   LayoutDashboard,
   FileText,
@@ -23,16 +24,20 @@ import {
   ShieldCheck,
   Layers,
   UserCog,
+  Lock,
+  ArrowLeft,
 } from "lucide-react";
+
+interface NavItem {
+  name: string;
+  href: string;
+  icon: React.ElementType;
+  permission: Permission;
+}
 
 interface NavGroup {
   label: string;
-  items: {
-    name: string;
-    href: string;
-    icon: React.ElementType;
-    badge?: string;
-  }[];
+  items: NavItem[];
 }
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -40,9 +45,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const { admin, isAdmin, loading, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  const isSuperAdmin = admin?.role === "super_admin";
-  const canManageAdmins = admin?.role === "super_admin" || admin?.role === "admin";
 
   useEffect(() => {
     if (pathname === "/admin/login") return;
@@ -59,57 +61,89 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (loading || !isAdmin) {
     return (
       <div className="min-h-screen bg-surface-base flex items-center justify-center text-text-muted text-sm font-bold">
-        Authenticating admin session & 2FA security...
+        Authenticating admin session & permissions...
       </div>
     );
   }
 
-  const navGroups: NavGroup[] = [
+  const role = (admin?.role || "admin") as AdminRole;
+  const userPerms = admin?.permissions;
+
+  const rawNavGroups: NavGroup[] = [
     {
       label: "OVERVIEW",
       items: [
-        { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
+        { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard, permission: "dashboard.view" },
       ],
     },
     {
       label: "WEBSITE MANAGEMENT",
       items: [
-        { name: "Website Content", href: "/admin/content", icon: FileText },
-        { name: "Services", href: "/admin/services", icon: Briefcase },
-        { name: "Products", href: "/admin/products", icon: Package },
-        { name: "Our Process", href: "/admin/process", icon: Layers },
-        { name: "Portfolio / Work", href: "/admin/portfolio", icon: FolderKanban },
+        { name: "Website Content", href: "/admin/content", icon: FileText, permission: "content.view" },
+        { name: "Services", href: "/admin/services", icon: Briefcase, permission: "services.view" },
+        { name: "Products", href: "/admin/products", icon: Package, permission: "products.view" },
+        { name: "Our Process", href: "/admin/process", icon: Layers, permission: "process.view" },
+        { name: "Portfolio / Work", href: "/admin/portfolio", icon: FolderKanban, permission: "portfolio.view" },
       ],
     },
     {
       label: "CUSTOMER MANAGEMENT",
       items: [
-        { name: "Users", href: "/admin/users", icon: Users },
-        { name: "Project Inquiries", href: "/admin/inquiries", icon: Inbox },
-        { name: "Consultations", href: "/admin/consultations", icon: MessageSquare },
-        { name: "General Queries", href: "/admin/queries", icon: HelpCircle },
+        { name: "Users", href: "/admin/users", icon: Users, permission: "users.view" },
+        { name: "Project Inquiries", href: "/admin/inquiries", icon: Inbox, permission: "inquiries.view" },
+        { name: "Consultations", href: "/admin/consultations", icon: MessageSquare, permission: "inquiries.view" },
+        { name: "General Queries", href: "/admin/queries", icon: HelpCircle, permission: "inquiries.view" },
       ],
     },
     {
       label: "COMMUNICATION",
       items: [
-        { name: "Email / Communication", href: "/admin/communication", icon: Mail },
+        { name: "Email / Communication", href: "/admin/communication", icon: Mail, permission: "inquiries.view" },
       ],
     },
     {
       label: "CONFIGURATION",
       items: [
-        ...(isSuperAdmin ? [{ name: "Website Settings", href: "/admin/settings", icon: Settings }] : []),
+        { name: "Website Settings", href: "/admin/settings", icon: Settings, permission: "settings.view" },
       ],
     },
     {
       label: "ACCOUNT",
       items: [
-        { name: "Admin Profile", href: "/admin/profile", icon: UserCheck },
-        ...(canManageAdmins ? [{ name: "Admin Management", href: "/admin/admins", icon: UserCog }] : []),
+        { name: "Admin Profile", href: "/admin/profile", icon: UserCheck, permission: "dashboard.view" },
+        { name: "Admin Management", href: "/admin/admins", icon: UserCog, permission: "admins.view" },
       ],
     },
-  ].filter((group) => group.items.length > 0);
+  ];
+
+  // Filter navigation items based on granular permissions
+  const navGroups = rawNavGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => hasPermission(role, item.permission, userPerms)),
+    }))
+    .filter((group) => group.items.length > 0);
+
+  // Check if current route is allowed
+  const allRoutePermissions: Record<string, Permission> = {
+    "/admin/dashboard": "dashboard.view",
+    "/admin/content": "content.view",
+    "/admin/services": "services.view",
+    "/admin/products": "products.view",
+    "/admin/process": "process.view",
+    "/admin/portfolio": "portfolio.view",
+    "/admin/users": "users.view",
+    "/admin/inquiries": "inquiries.view",
+    "/admin/consultations": "inquiries.view",
+    "/admin/queries": "inquiries.view",
+    "/admin/communication": "inquiries.view",
+    "/admin/settings": "settings.view",
+    "/admin/profile": "dashboard.view",
+    "/admin/admins": "admins.view",
+  };
+
+  const requiredPerm = allRoutePermissions[pathname];
+  const isRouteAllowed = !requiredPerm || hasPermission(role, requiredPerm, userPerms);
 
   const handleLogout = async () => {
     await logout();
@@ -128,9 +162,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <span className="text-[10px] font-extrabold text-accent bg-accent/10 border border-accent/30 px-2 py-0.5 rounded">
               ADMIN
             </span>
-            {admin?.role && (
+            {role && (
               <span className="text-[9px] font-bold text-text-muted/60 uppercase tracking-wider">
-                {admin.role.replace("_", " ")}
+                {role.replace("_", " ")}
               </span>
             )}
           </div>
@@ -272,9 +306,29 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </header>
 
-        <main className="flex-1 p-6 sm:p-8 overflow-y-auto">{children}</main>
+        <main className="flex-1 p-6 sm:p-8 overflow-y-auto">
+          {!isRouteAllowed ? (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-surface-raised/40 border border-rose-500/20 rounded-3xl">
+              <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center mb-4">
+                <Lock size={32} />
+              </div>
+              <h2 className="text-xl font-black text-white">Access Denied (403 Forbidden)</h2>
+              <p className="text-xs text-text-muted mt-2 max-w-md leading-relaxed">
+                Your admin account does not have permission to access <code className="text-accent">{pathname}</code>.
+              </p>
+              <Link
+                href="/admin/dashboard"
+                className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-surface-base font-extrabold text-xs hover:bg-accent-hover transition-colors"
+              >
+                <ArrowLeft size={16} />
+                <span>Return to Dashboard</span>
+              </Link>
+            </div>
+          ) : (
+            children
+          )}
+        </main>
       </div>
     </div>
   );
 }
-
