@@ -3,6 +3,7 @@ import { consultationRequestSchema } from "@/lib/validations";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { collection as clientCollection, addDoc } from "firebase/firestore";
 import { db as clientDb } from "@/lib/firebase";
+import { sendInquiryNotificationEmail } from "@/lib/email-service";
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,6 +42,7 @@ export async function POST(request: NextRequest) {
       adminNotes: "",
       createdAt: now,
       updatedAt: now,
+      notificationStatus: "pending",
     };
 
     // 3. Save to Firestore (Try Admin SDK first, fallback to Client SDK)
@@ -52,6 +54,18 @@ export async function POST(request: NextRequest) {
       const docRef = await addDoc(clientCollection(clientDb, "consultationRequests"), consultationRecord);
       docId = docRef.id;
     }
+
+    // 4. Non-blocking email notification trigger
+    sendInquiryNotificationEmail({
+      type: "Free Consultation",
+      fullName: data.fullName,
+      email: data.email,
+      phone: data.phone || "",
+      companyName: data.companyName || "",
+      consultationType: data.consultationType,
+      message: data.message,
+      createdAt: now,
+    }).catch(() => {});
 
     return NextResponse.json(
       {

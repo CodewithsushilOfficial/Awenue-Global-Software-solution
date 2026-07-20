@@ -60,12 +60,26 @@ export default function Footer() {
     resolver: zodResolver(newsletterSchema),
   });
 
-  const onSubmit = async () => {
+  const onSubmit = async (values: NewsletterFormValues) => {
     setIsSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setIsSubmitting(false);
-    setIsSuccess(true);
-    reset();
+    try {
+      await fetch("/api/queries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: "Newsletter Subscriber",
+          email: values.email,
+          subject: "Newsletter Subscription",
+          message: "User subscribed to newsletter via website footer.",
+        }),
+      });
+      setIsSuccess(true);
+      reset();
+    } catch (err) {
+      console.error("Newsletter submission error:", err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const services = [
