@@ -54,12 +54,20 @@ export default function AdminConsultationsPage() {
 
   const fetchConsultations = useCallback(async () => {
     try {
-      const q = query(collection(db, "consultationRequests"), orderBy("createdAt", "desc"));
-      const snap = await getDocs(q);
-      const list: ConsultationRequest[] = [];
-      snap.forEach((docSnap) => {
-        list.push({ ...docSnap.data(), id: docSnap.id } as ConsultationRequest);
-      });
+      let list: ConsultationRequest[] = [];
+      try {
+        const q = query(collection(db, "consultationRequests"), orderBy("createdAt", "desc"));
+        const snap = await getDocs(q);
+        snap.forEach((docSnap) => {
+          list.push({ ...docSnap.data(), id: docSnap.id } as ConsultationRequest);
+        });
+      } catch {
+        const res = await fetch("/api/admin/cms?collectionName=consultationRequests");
+        const json = await res.json();
+        if (res.ok && Array.isArray(json.data)) {
+          list = json.data;
+        }
+      }
       setConsultations(list);
     } catch (err) {
       console.error("Error fetching consultations:", err);

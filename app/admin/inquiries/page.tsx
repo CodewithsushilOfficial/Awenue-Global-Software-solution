@@ -57,12 +57,20 @@ export default function AdminInquiriesPage() {
 
   const fetchInquiries = useCallback(async () => {
     try {
-      const q = query(collection(db, "projectInquiries"), orderBy("createdAt", "desc"));
-      const snap = await getDocs(q);
-      const list: ProjectInquiry[] = [];
-      snap.forEach((docSnap) => {
-        list.push({ ...docSnap.data(), id: docSnap.id } as ProjectInquiry);
-      });
+      let list: ProjectInquiry[] = [];
+      try {
+        const q = query(collection(db, "projectInquiries"), orderBy("createdAt", "desc"));
+        const snap = await getDocs(q);
+        snap.forEach((docSnap) => {
+          list.push({ ...docSnap.data(), id: docSnap.id } as ProjectInquiry);
+        });
+      } catch {
+        const res = await fetch("/api/admin/cms?collectionName=projectInquiries");
+        const json = await res.json();
+        if (res.ok && Array.isArray(json.data)) {
+          list = json.data;
+        }
+      }
       setInquiries(list);
     } catch (err) {
       console.error("Error fetching project inquiries:", err);

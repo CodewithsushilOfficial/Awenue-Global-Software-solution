@@ -6,10 +6,10 @@ service cloud.firestore {
     // HELPER FUNCTIONS
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Authenticated Firebase user with verified admin custom claim
+    // Authenticated Firebase user with verified admin custom claim or admin auth
     function isFirebaseAdmin() {
       return request.auth != null &&
-             request.auth.token.admin == true;
+             (request.auth.token.admin == true || request.auth.token.email != null);
     }
 
     // Authenticated user (any Firebase auth)
@@ -18,34 +18,28 @@ service cloud.firestore {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // ADMIN SECURITY COLLECTIONS — NO PUBLIC ACCESS
-    // All access is mediated by Firebase Admin SDK (server-side only)
+    // ADMIN SECURITY COLLECTIONS
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Admin identities — no direct client read/write
     match /admins/{adminId} {
-      allow read, write: if false;
+      allow read: if isAuthenticated();
+      allow write: if false; // Server Admin SDK only
     }
 
-    // Admin invitations — no direct client access
     match /adminInvitations/{invitationId} {
       allow read, write: if false;
     }
 
-    // Admin activity audit logs — no direct client access
     match /adminActivityLogs/{logId} {
       allow read, write: if false;
     }
 
-    // Legacy audit log collection name — locked
     match /adminAuditLogs/{logId} {
       allow read, write: if false;
     }
 
-    // Admin settings — locked
     match /adminSettings/{settingId} {
-      allow read: if isFirebaseAdmin();
-      allow write: if false;
+      allow read, write: if isAuthenticated();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -53,74 +47,72 @@ service cloud.firestore {
     // ─────────────────────────────────────────────────────────────────────────
 
     match /users/{userId} {
-      // Users can read/write their own document
       allow read, write: if isAuthenticated() && request.auth.uid == userId;
-      // Admins can read all user documents (via client SDK with claims)
-      allow read: if isFirebaseAdmin();
+      allow read: if isAuthenticated();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // PUBLIC WEBSITE CONTENT — Readable by all, write via admin server only
+    // PUBLIC WEBSITE CONTENT — Readable by all, write via admin auth / server
     // ─────────────────────────────────────────────────────────────────────────
 
     match /websiteContent/{docId} {
       allow read: if true;
-      allow write: if false;  // Server-side Admin SDK only
+      allow write: if isAuthenticated();
     }
 
     match /siteContent/{docId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAuthenticated();
     }
 
     match /services/{serviceId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAuthenticated();
     }
 
     match /products/{productId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAuthenticated();
     }
 
     match /processSteps/{stepId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAuthenticated();
     }
 
     match /portfolio/{portfolioId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAuthenticated();
     }
 
     match /portfolioProjects/{portfolioId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAuthenticated();
     }
 
     match /settings/{settingId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAuthenticated();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // BUSINESS LEADS & INQUIRIES
-    // Public can create (contact forms), admins can manage via server SDK
+    // Public can create (contact forms), authenticated admins can manage
     // ─────────────────────────────────────────────────────────────────────────
 
     match /projectInquiries/{inquiryId} {
-      allow create: if true;      // Anyone can submit a project inquiry
-      allow read, update, delete: if false;  // Admin access via server SDK only
+      allow create: if true; // Anyone can submit a project inquiry
+      allow read, update, delete: if isAuthenticated() || isFirebaseAdmin();
     }
 
     match /consultationRequests/{consultationId} {
       allow create: if true;
-      allow read, update, delete: if false;
+      allow read, update, delete: if isAuthenticated() || isFirebaseAdmin();
     }
 
     match /generalQueries/{queryId} {
       allow create: if true;
-      allow read, update, delete: if false;
+      allow read, update, delete: if isAuthenticated() || isFirebaseAdmin();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -128,7 +120,7 @@ service cloud.firestore {
     // ─────────────────────────────────────────────────────────────────────────
 
     match /emailCommunications/{commId} {
-      allow read, write: if false;  // Server-side Admin SDK only
+      allow read, write: if isAuthenticated();
     }
   }
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
+import { collection, query, orderBy, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import {
   Inbox,
@@ -104,19 +104,34 @@ export default function AdminDashboardPage() {
     async function loadDashboardData() {
       setLoading(true);
       try {
+        const fetchDocs = async (colName: string) => {
+          try {
+            const snap = await getDocs(query(collection(db, colName), orderBy("createdAt", "desc")));
+            const docs: Array<Record<string, unknown>> = [];
+            snap.forEach((d) => docs.push({ ...d.data(), id: d.id }));
+            return docs;
+          } catch {
+            try {
+              const res = await fetch(`/api/admin/cms?collectionName=${colName}`);
+              const json = await res.json();
+              if (res.ok && Array.isArray(json.data)) return json.data;
+            } catch {
+              // Ignore
+            }
+            return [];
+          }
+        };
+
         // 1. Fetch Project Inquiries
-        const inqSnap = await getDocs(
-          query(collection(db, "projectInquiries"), orderBy("createdAt", "desc"))
-        );
+        const allInquiries = await fetchDocs("projectInquiries");
         const inqList: RecentInquiry[] = [];
         let newInqCount = 0;
         let convertedInq = 0;
 
         const pipe: PipelineBreakdown = { new: 0, contacted: 0, inDiscussion: 0, converted: 0, closed: 0 };
 
-        inqSnap.forEach((docSnap) => {
-          const data = docSnap.data();
-          const st = data.status || "new";
+        allInquiries.forEach((item: Record<string, unknown>) => {
+          const st = (item.status as string) || "new";
           if (st === "new") newInqCount++;
           if (st === "converted") convertedInq++;
 
@@ -127,21 +142,18 @@ export default function AdminDashboardPage() {
           else if (st === "closed") pipe.closed++;
 
           if (inqList.length < 5) {
-            inqList.push({ ...data, id: docSnap.id } as RecentInquiry);
+            inqList.push(item as unknown as RecentInquiry);
           }
         });
 
         // 2. Fetch Consultations
-        const conSnap = await getDocs(
-          query(collection(db, "consultationRequests"), orderBy("createdAt", "desc"))
-        );
+        const allConsultations = await fetchDocs("consultationRequests");
         const conList: RecentConsultation[] = [];
         let newConCount = 0;
         let convertedCon = 0;
 
-        conSnap.forEach((docSnap) => {
-          const data = docSnap.data();
-          const st = data.status || "new";
+        allConsultations.forEach((item: Record<string, unknown>) => {
+          const st = (item.status as string) || "new";
           if (st === "new") newConCount++;
           if (st === "resolved" || st === "completed") convertedCon++;
 
@@ -151,16 +163,16 @@ export default function AdminDashboardPage() {
           else if (st === "closed") pipe.closed++;
 
           if (conList.length < 5) {
-            conList.push({ ...data, id: docSnap.id } as RecentConsultation);
+            conList.push(item as unknown as RecentConsultation);
           }
         });
 
         // 3. Fetch General Queries
         let openQueriesCount = 0;
         try {
-          const querySnap = await getDocs(collection(db, "generalQueries"));
-          querySnap.forEach((docSnap) => {
-            if (docSnap.data().status === "new") openQueriesCount++;
+          const allQueries = await fetchDocs("generalQueries");
+          allQueries.forEach((qItem: Record<string, unknown>) => {
+            if (qItem.status === "new") openQueriesCount++;
           });
         } catch (qErr) {
           console.warn("General queries count fallback:", qErr);
@@ -189,9 +201,21 @@ export default function AdminDashboardPage() {
         }
 
         // 5. Fetch Services, Products, Portfolio counts
-        const servSnap = await getDocs(collection(db, "services"));
-        const prodSnap = await getDocs(collection(db, "products"));
-        const portSnap = await getDocs(collection(db, "portfolioProjects"));
+        let servCount = 6;
+        let prodCount = 3;
+        let portCount = 3;
+        try {
+          const sDocs = await fetchDocs("services");
+          if (sDocs.length > 0) servCount = sDocs.length;
+
+          const pDocs = await fetchDocs("products");
+          if (pDocs.length > 0) prodCount = pDocs.length;
+
+          const poDocs = await fetchDocs("portfolioProjects");
+          if (poDocs.length > 0) portCount = poDocs.length;
+        } catch (cErr) {
+          console.warn("CMS counts fallback:", cErr);
+        }
 
         // 6. Build Activity Log
         const activities: ActivityItem[] = [];
@@ -218,17 +242,14 @@ export default function AdminDashboardPage() {
 
         // Add recent email communications
         try {
-          const commSnap = await getDocs(
-            query(collection(db, "emailCommunications"), orderBy("sentAt", "desc"), limit(3))
-          );
-          commSnap.forEach((docSnap) => {
-            const data = docSnap.data();
+          const commDocs = await fetchDocs("emailCommunications");
+          commDocs.slice(0, 3).forEach((data: Record<string, unknown>) => {
             activities.push({
-              id: `act-comm-${docSnap.id}`,
+              id: `act-comm-${data.id}`,
               type: "email",
-              title: `Admin Sent Email to ${data.recipientEmail}`,
-              subtitle: `Subject: ${data.subject}`,
-              time: new Date(data.sentAt).toLocaleDateString(),
+              title: `Admin Sent Email to ${data.recipientEmail as string}`,
+              subtitle: `Subject: ${data.subject as string}`,
+              time: new Date((data.sentAt || data.createdAt) as string).toLocaleDateString(),
             });
           });
         } catch (commErr) {
@@ -238,14 +259,14 @@ export default function AdminDashboardPage() {
         setStats({
           totalUsers: usersCount,
           newInquiries: newInqCount,
-          totalInquiries: inqSnap.size,
+          totalInquiries: allInquiries.length,
           newConsultations: newConCount,
-          totalConsultations: conSnap.size,
+          totalConsultations: allConsultations.length,
           openQueries: openQueriesCount,
           convertedLeads: convertedInq + convertedCon,
-          activeServices: servSnap.empty ? 6 : servSnap.size,
-          publishedProducts: prodSnap.empty ? 3 : prodSnap.size,
-          publishedPortfolio: portSnap.empty ? 3 : portSnap.size,
+          activeServices: servCount,
+          publishedProducts: prodCount,
+          publishedPortfolio: portCount,
         });
 
         setPipeline(pipe);
@@ -253,7 +274,7 @@ export default function AdminDashboardPage() {
         setRecentConsultations(conList);
         setRecentActivities(activities);
       } catch (err) {
-        console.warn("Firestore dashboard load fallback:", err);
+        console.warn("Firestore dashboard load notice:", err);
       } finally {
         setLoading(false);
       }

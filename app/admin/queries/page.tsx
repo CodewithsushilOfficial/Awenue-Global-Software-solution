@@ -51,12 +51,20 @@ export default function AdminGeneralQueriesPage() {
 
   const fetchQueries = useCallback(async () => {
     try {
-      const q = query(collection(db, "generalQueries"), orderBy("createdAt", "desc"));
-      const snap = await getDocs(q);
-      const list: GeneralQuery[] = [];
-      snap.forEach((docSnap) => {
-        list.push({ ...docSnap.data(), id: docSnap.id } as GeneralQuery);
-      });
+      let list: GeneralQuery[] = [];
+      try {
+        const q = query(collection(db, "generalQueries"), orderBy("createdAt", "desc"));
+        const snap = await getDocs(q);
+        snap.forEach((docSnap) => {
+          list.push({ ...docSnap.data(), id: docSnap.id } as GeneralQuery);
+        });
+      } catch {
+        const res = await fetch("/api/admin/cms?collectionName=generalQueries");
+        const json = await res.json();
+        if (res.ok && Array.isArray(json.data)) {
+          list = json.data;
+        }
+      }
       setQueriesList(list);
     } catch (err) {
       console.error("Error fetching general queries:", err);
