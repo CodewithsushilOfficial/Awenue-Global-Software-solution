@@ -44,7 +44,17 @@ export default function InviteAdminModal({ isOpen, onClose, onSuccess }: InviteA
         }),
       });
 
-      const data = await res.json();
+      let data: any = {};
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(
+          `Server returned an invalid response (${res.status}). Please check your server logs or SMTP configuration.`
+        );
+      }
+
       if (!res.ok) {
         throw new Error(data.error || "Failed to send admin invitation.");
       }

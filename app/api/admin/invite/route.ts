@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 import { sendAdminInviteEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
@@ -37,21 +37,24 @@ export async function GET() {
     });
 
     try {
-      const snap = await adminDb.collection("admins").get();
-      snap.forEach((doc) => {
-        const data = doc.data();
-        if (data.email && data.email.toLowerCase() !== defaultAdminEmail) {
-          adminDocs.push({
-            id: doc.id,
-            email: data.email,
-            fullName: data.fullName || "Administrator",
-            role: data.role || "Administrator",
-            status: data.status || "active",
-            createdAt: data.createdAt || new Date().toISOString(),
-            invitedBy: data.invitedBy || "Admin",
-          });
-        }
-      });
+      const db = getAdminDb();
+      if (db) {
+        const snap = await db.collection("admins").get();
+        snap.forEach((doc) => {
+          const data = doc.data();
+          if (data.email && data.email.toLowerCase() !== defaultAdminEmail) {
+            adminDocs.push({
+              id: doc.id,
+              email: data.email,
+              fullName: data.fullName || "Administrator",
+              role: data.role || "Administrator",
+              status: data.status || "active",
+              createdAt: data.createdAt || new Date().toISOString(),
+              invitedBy: data.invitedBy || "Admin",
+            });
+          }
+        });
+      }
     } catch (dbErr) {
       console.warn("Firestore fetch admins notice:", dbErr);
     }
@@ -80,52 +83,55 @@ export async function POST(request: NextRequest) {
     const cleanFullName = fullName ? String(fullName).trim() : "Administrator";
     const cleanRole = role ? String(role).trim() : "Administrator";
     const nowISO = new Date().toISOString();
-
-    // Check if already in Firestore
-    const existingSnap = await adminDb
-      .collection("admins")
-      .where("email", "==", normalizedEmail)
-      .limit(1)
-      .get();
-
-    if (!existingSnap.empty) {
-      return NextResponse.json(
-        { error: `An administrator with email ${normalizedEmail} is already registered.` },
-        { status: 400 }
-      );
-    }
-
     const adminDocId = "admin_" + crypto.createHash("md5").update(normalizedEmail).digest("hex").slice(0, 12);
 
-    // Save to Firestore 'admins' collection
-    await adminDb.collection("admins").doc(adminDocId).set({
-      email: normalizedEmail,
-      fullName: cleanFullName,
-      role: cleanRole,
-      status: "active",
-      createdAt: nowISO,
-      invitedBy: invitedBy || "Super Admin",
-    });
+    const db = getAdminDb();
+    if (db) {
+      // Check if already in Firestore
+      const existingSnap = await db
+        .collection("admins")
+        .where("email", "==", normalizedEmail)
+        .limit(1)
+        .get();
+
+      if (!existingSnap.empty) {
+        return NextResponse.json(
+          { error: `An administrator with email ${normalizedEmail} is already registered.` },
+          { status: 400 }
+        );
+      }
+
+      // Save to Firestore 'admins' collection
+      await db.collection("admins").doc(adminDocId).set({
+        email: normalizedEmail,
+        fullName: cleanFullName,
+        role: cleanRole,
+        status: "active",
+        createdAt: nowISO,
+        invitedBy: invitedBy || "Super Admin",
+      });
+    }
 
     // Set Firebase Auth custom claims if available
-    let userUid = adminDocId;
-    try {
-      if (adminAuth) {
+    const auth = getAdminAuth();
+    if (auth) {
+      try {
+        let userUid = adminDocId;
         try {
-          const userRecord = await adminAuth.getUserByEmail(normalizedEmail);
+          const userRecord = await auth.getUserByEmail(normalizedEmail);
           userUid = userRecord.uid;
         } catch {
-          const newUser = await adminAuth.createUser({
+          const newUser = await auth.createUser({
             email: normalizedEmail,
             emailVerified: true,
             displayName: cleanFullName,
           });
           userUid = newUser.uid;
         }
-        await adminAuth.setCustomUserClaims(userUid, { role: "admin", admin: true });
+        await auth.setCustomUserClaims(userUid, { role: "admin", admin: true });
+      } catch (authErr) {
+        console.warn("[ADMIN INVITE] Firebase Admin Auth setup notice:", authErr);
       }
-    } catch (authErr) {
-      console.warn("[ADMIN INVITE] Firebase Admin Auth setup notice:", authErr);
     }
 
     // Send Admin Invitation Email via Nodemailer
@@ -137,23 +143,25 @@ export async function POST(request: NextRequest) {
     });
 
     // Audit log entry
-    try {
-      await adminDb.collection("adminAuditLogs").add({
-        type: "ADMIN_INVITED",
-        invitedEmail: normalizedEmail,
-        fullName: cleanFullName,
-        role: cleanRole,
-        invitedBy: invitedBy || "Super Admin",
-        createdAt: nowISO,
-      });
-    } catch (auditErr) {
-      console.warn("[ADMIN INVITE] Audit log failed:", auditErr);
+    if (db) {
+      try {
+        await db.collection("adminAuditLogs").add({
+          type: "ADMIN_INVITED",
+          invitedEmail: normalizedEmail,
+          fullName: cleanFullName,
+          role: cleanRole,
+          invitedBy: invitedBy || "Super Admin",
+          createdAt: nowISO,
+        });
+      } catch (auditErr) {
+        console.warn("[ADMIN INVITE] Audit log failed:", auditErr);
+      }
     }
 
     return NextResponse.json(
       {
         success: true,
-        message: `Admin invitation sent to ${normalizedEmail} successfully.`,
+        message: `Admin invitation sent to ${normalizedEmail} successfully!`,
         emailSent: emailResult.success,
       },
       { status: 200 }

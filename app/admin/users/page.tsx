@@ -54,9 +54,12 @@ export default function AdminUsersPage() {
     setLoading(true);
     try {
       const res = await fetch("/api/admin/users");
-      const data = await res.json();
-      if (res.ok && Array.isArray(data.users)) {
-        setUsers(data.users);
+      const contentType = res.headers.get("content-type");
+      if (res.ok && contentType?.includes("application/json")) {
+        const data = await res.json();
+        if (Array.isArray(data.users)) {
+          setUsers(data.users);
+        }
       }
     } catch (err) {
       console.error("Error loading users:", err);
@@ -68,9 +71,12 @@ export default function AdminUsersPage() {
   const fetchAdmins = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/invite");
-      const data = await res.json();
-      if (res.ok && Array.isArray(data.admins)) {
-        setAdmins(data.admins);
+      const contentType = res.headers.get("content-type");
+      if (res.ok && contentType?.includes("application/json")) {
+        const data = await res.json();
+        if (Array.isArray(data.admins)) {
+          setAdmins(data.admins);
+        }
       }
     } catch (err) {
       console.error("Error loading admins:", err);
