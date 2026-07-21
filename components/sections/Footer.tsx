@@ -133,27 +133,28 @@ export default function Footer({
   };
 
   const services = [
-    { label: "Web Development", href: "#services" },
-    { label: "SaaS Development", href: "#services" },
-    { label: "Mobile App Development", href: "#services" },
-    { label: "AI & Automation", href: "#services" },
-    { label: "Digital Marketing", href: "#services" },
-    { label: "Branding & UI/UX", href: "#services" },
+    { label: "Web Development", href: "/services/web-development" },
+    { label: "SaaS Development", href: "/services/saas-development" },
+    { label: "Mobile App Development", href: "/services/mobile-app-development" },
+    { label: "AI & Automation", href: "/services/ai-automation" },
+    { label: "Digital Marketing", href: "/services/digital-marketing" },
+    { label: "Branding & UI/UX", href: "/services/graphic-design-branding" },
   ];
 
   const products = [
-    { label: "Awenue CRM", badge: "SaaS", href: "#products" },
-    { label: "Awenue College ERP", badge: "Platform", href: "#products" },
-    { label: "Hospital Management", badge: "Soon", href: "#products" },
+    { label: "Awenue CRM", badge: "SaaS", href: "/products/awenue-crm" },
+    { label: "Awenue College ERP", badge: "Platform", href: "/products/awenue-college-erp" },
+    { label: "Hospital Management", badge: "Soon", href: "/products/hospital-management" },
   ];
 
   const company = [
-    { label: "Home", href: "#hero" },
-    { label: "Services", href: "#services" },
-    { label: "Products", href: "#products" },
-    { label: "How We Work", href: "#process" },
-    { label: "Get Consultation", href: "#contact" },
+    { label: "Home", href: "/" },
+    { label: "Services", href: "/#services" },
+    { label: "Products", href: "/#products" },
+    { label: "How We Work", href: "/#process" },
+    { label: "Get Consultation", href: "/#contact" },
   ];
+
 
   return (
     <footer className="bg-surface-base text-text-secondary border-t border-border-dark pt-20 pb-10 relative overflow-hidden z-10">

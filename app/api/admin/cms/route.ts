@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
 }
 
 // Helper to revalidate homepage on-demand for relevant collections
-function triggerHomepageRevalidation(collectionName: string) {
+function triggerHomepageRevalidation(collectionName: string, slug?: string) {
   const homepageCollections = [
     "services",
     "products",
@@ -78,7 +78,20 @@ function triggerHomepageRevalidation(collectionName: string) {
   if (homepageCollections.includes(collectionName)) {
     try {
       revalidatePath("/");
-      console.log(`[REVALIDATE] Homepage revalidated via CMS API for: ${collectionName}`);
+      revalidatePath("/sitemap.xml");
+      
+      // Revalidate individual dynamic page routes
+      if (collectionName === "services") {
+        revalidatePath("/services/[slug]", "page");
+        if (slug) revalidatePath(`/services/${slug}`);
+      } else if (collectionName === "products") {
+        revalidatePath("/products/[slug]", "page");
+        if (slug) revalidatePath(`/products/${slug}`);
+      } else if (collectionName === "portfolioProjects") {
+        revalidatePath("/portfolio/[slug]", "page");
+        if (slug) revalidatePath(`/portfolio/${slug}`);
+      }
+      console.log(`[REVALIDATE] Paths revalidated for collection: ${collectionName}, slug: ${slug || "none"}`);
     } catch (err) {
       console.error("[REVALIDATE] Error in revalidatePath:", err);
     }
@@ -194,7 +207,7 @@ export async function POST(request: NextRequest) {
             createdAt: data?.createdAt || nowISO,
             updatedAt: nowISO,
           });
-          triggerHomepageRevalidation(collectionName);
+          triggerHomepageRevalidation(collectionName, data?.slug);
           return NextResponse.json({ success: true, id: docRef.id, message: "Document added successfully." });
         }
 
@@ -203,7 +216,7 @@ export async function POST(request: NextRequest) {
             ...data,
             updatedAt: nowISO,
           });
-          triggerHomepageRevalidation(collectionName);
+          triggerHomepageRevalidation(collectionName, data?.slug);
           return NextResponse.json({ success: true, id: docId, message: "Document updated successfully." });
         }
 
@@ -216,10 +229,11 @@ export async function POST(request: NextRequest) {
           { merge: true }
         );
 
-        triggerHomepageRevalidation(collectionName);
+        triggerHomepageRevalidation(collectionName, data?.slug);
         return NextResponse.json({ success: true, id: docId, message: "CMS content saved successfully." });
       }
     }
+
 
     return NextResponse.json(
       {
