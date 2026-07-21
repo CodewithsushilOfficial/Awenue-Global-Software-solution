@@ -569,15 +569,36 @@ export interface ServiceItem {
   cta?: string;
   modalKey?: string;
   displayOrder?: number;
+  shortDescription?: string;
+  published?: boolean;
+  seoTitle?: string;
+  seoDescription?: string;
+  seoCanonical?: string;
+  seoOgImage?: string;
+  seoNoindex?: boolean;
+  schemaType?: string;
+  imageUrl?: string;
+  detailedDescription?: string;
+}
+
+export interface ServiceData {
+  id: string;
+  title?: string;
+  displayOrder?: number;
+  shortDescription?: string;
+  detailedDescription?: string;
+  features?: string[] | readonly string[];
+  ctaLabel?: string;
+  [key: string]: unknown;
 }
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
-export default function Services({ initialServices }: { initialServices?: any[] }) {
+export default function Services({ initialServices }: { initialServices?: ServiceData[] }) {
   const { openModal } = useModal();
   
   const [servicesList, setServicesList] = useState<ServiceItem[]>(() => {
     if (initialServices && initialServices.length > 0) {
-      return initialServices.map((data: any) => {
+      return initialServices.map((data: ServiceData) => {
         const defaultMatch = SERVICES.find((s) => s.id === data.id || s.title.toLowerCase() === data.title?.toLowerCase());
         return {
           id: data.id,
@@ -588,9 +609,9 @@ export default function Services({ initialServices }: { initialServices?: any[] 
           colorRgb: defaultMatch ? defaultMatch.colorRgb : "59,130,246",
           colorClass: defaultMatch ? defaultMatch.colorClass : "text-blue-400",
           badgeBg: defaultMatch ? defaultMatch.badgeBg : "bg-blue-500/15 border-blue-400/30",
-          title: data.title,
+          title: data.title || (defaultMatch ? defaultMatch.title : "Custom Service"),
           subtitle: data.shortDescription || (defaultMatch ? defaultMatch.subtitle : "Build a Powerful Digital Presence."),
-          desc: data.detailedDescription || data.shortDescription,
+          desc: data.detailedDescription || data.shortDescription || (defaultMatch ? defaultMatch.desc : "No description available."),
           features: data.features || (defaultMatch ? defaultMatch.features : []),
           cta: data.ctaLabel || "Explore Service",
           modalKey: "Website",

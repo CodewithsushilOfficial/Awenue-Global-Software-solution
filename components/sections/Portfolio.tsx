@@ -9,7 +9,7 @@ import { useModal } from "@/components/providers/ModalProvider";
 import { ExternalLink, ArrowRight } from "lucide-react";
 import { motion } from "motion/react";
 
-interface PortfolioProject {
+export interface PortfolioProject {
   id: string;
   name: string;
   slug: string;
@@ -22,6 +22,12 @@ interface PortfolioProject {
   imageAlt?: string;
   displayOrder: number;
   published: boolean;
+  seoTitle?: string;
+  seoDescription?: string;
+  seoCanonical?: string;
+  seoOgImage?: string;
+  seoNoindex?: boolean;
+  schemaType?: string;
 }
 
 const DEFAULT_PROJECTS: PortfolioProject[] = [

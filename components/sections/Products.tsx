@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, createElement } from "react";
 import Image from "next/image";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { motion } from "motion/react";
 import RevealOnScroll from "@/components/motion/RevealOnScroll";
 import { useModal } from "@/components/providers/ModalProvider";
-import { ArrowRight, ArrowUpRight, CheckCircle2, LayoutDashboard, GraduationCap, HeartPulse, Box } from "lucide-react";
+import { ArrowRight, CheckCircle2, LayoutDashboard, GraduationCap, HeartPulse, Box } from "lucide-react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
@@ -31,6 +31,12 @@ export interface ProductItem {
   accentColor?: string;
   accentRgb?: string;
   category?: string;
+  seoTitle?: string;
+  seoDescription?: string;
+  seoCanonical?: string;
+  seoOgImage?: string;
+  seoNoindex?: boolean;
+  schemaType?: string;
 }
 
 const DEFAULT_PRODUCTS: ProductItem[] = [
@@ -280,7 +286,7 @@ function ProductCard({
   index: number;
   onCTA: () => void;
 }) {
-  const Icon = getProductIcon(product.slug || product.id);
+  const productIcon = getProductIcon(product.slug || product.id);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // Entrance animation
@@ -408,7 +414,7 @@ function ProductCard({
                   color: accentColor,
                 }}
               >
-                <Icon size={18} />
+                {createElement(productIcon, { size: 18 })}
               </div>
               <h3 className="text-xl font-bold text-white leading-tight">{product.name}</h3>
             </div>
@@ -476,7 +482,7 @@ function ProductCard({
                     color: accentColor,
                   }}
                 >
-                  <Icon size={15} />
+                  {createElement(productIcon, { size: 15 })}
                 </div>
                 <h3 className="text-base font-bold text-white">{product.name}</h3>
               </div>

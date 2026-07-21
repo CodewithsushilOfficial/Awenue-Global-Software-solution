@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     }
 
     const snap = await adminDb.collection(collectionName).orderBy("createdAt", "desc").get();
-    const list = snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+    const list = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     return NextResponse.json({ success: true, data: list });
   } catch (err: unknown) {
     console.error("API /api/admin/cms GET error:", err);

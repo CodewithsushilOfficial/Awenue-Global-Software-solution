@@ -6,6 +6,7 @@ import { db } from "@/lib/firebase";
 import Navigation from "@/components/sections/Navigation";
 import Footer from "@/components/sections/Footer";
 import { ArrowRight, CheckCircle2, ChevronRight, Package, ExternalLink, Sparkles, Code2 } from "lucide-react";
+import { ProductItem } from "@/components/sections/Products";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -17,12 +18,12 @@ export const revalidate = false;
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   
-  let productDoc: any = null;
+  let productDoc: ProductItem | null = null;
   try {
     const q = query(collection(db, "products"), where("slug", "==", slug));
     const snap = await getDocs(q);
     if (!snap.empty) {
-      productDoc = snap.docs[0].data();
+      productDoc = { id: snap.docs[0].id, ...snap.docs[0].data() } as ProductItem;
     }
   } catch (err) {
     console.error("Error fetching metadata for product:", err);
@@ -82,12 +83,12 @@ export async function generateStaticParams() {
 export default async function ProductPage({ params }: PageProps) {
   const { slug } = await params;
 
-  let dbProduct: any = null;
+  let dbProduct: ProductItem | null = null;
   try {
     const q = query(collection(db, "products"), where("slug", "==", slug));
     const snap = await getDocs(q);
     if (!snap.empty) {
-      dbProduct = { id: snap.docs[0].id, ...snap.docs[0].data() };
+      dbProduct = { id: snap.docs[0].id, ...snap.docs[0].data() } as ProductItem;
     }
   } catch (err) {
     console.error("Error fetching product data:", err);

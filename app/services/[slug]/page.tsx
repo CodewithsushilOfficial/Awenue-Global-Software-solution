@@ -6,6 +6,7 @@ import { db } from "@/lib/firebase";
 import Navigation from "@/components/sections/Navigation";
 import Footer from "@/components/sections/Footer";
 import { ArrowRight, CheckCircle2, ChevronRight, HelpCircle, Code2, Layers, Cpu, ShieldCheck } from "lucide-react";
+import { ServiceItem } from "@/components/sections/Services";
 
 // Next.js 16 Asynchronous Page params interface
 interface PageProps {
@@ -262,12 +263,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { slug } = await params;
   
   // Fetch service from Firestore
-  let serviceDoc: any = null;
+  let serviceDoc: ServiceItem | null = null;
   try {
     const q = query(collection(db, "services"), where("slug", "==", slug));
     const snap = await getDocs(q);
     if (!snap.empty) {
-      serviceDoc = snap.docs[0].data();
+      serviceDoc = { id: snap.docs[0].id, ...snap.docs[0].data() } as ServiceItem;
     }
   } catch (err) {
     console.error("Error fetching metadata for service:", err);
@@ -335,12 +336,12 @@ export default async function ServicePage({ params }: PageProps) {
   const { slug } = await params;
 
   // Retrieve service from Firestore
-  let dbService: any = null;
+  let dbService: ServiceItem | null = null;
   try {
     const q = query(collection(db, "services"), where("slug", "==", slug));
     const snap = await getDocs(q);
     if (!snap.empty) {
-      dbService = { id: snap.docs[0].id, ...snap.docs[0].data() };
+      dbService = { id: snap.docs[0].id, ...snap.docs[0].data() } as ServiceItem;
     }
   } catch (err) {
     console.error("Error fetching service data:", err);

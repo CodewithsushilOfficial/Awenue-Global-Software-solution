@@ -47,7 +47,7 @@ async function verifySessionCookie(token: string): Promise<boolean> {
   }
 }
 
-export async function middleware(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   try {
     const { pathname } = request.nextUrl;
 

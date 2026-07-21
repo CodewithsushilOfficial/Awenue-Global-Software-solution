@@ -5,7 +5,8 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import Navigation from "@/components/sections/Navigation";
 import Footer from "@/components/sections/Footer";
-import { ArrowRight, ChevronRight, CheckCircle2, Code2, ExternalLink, ShieldCheck } from "lucide-react";
+import { ArrowRight, ChevronRight, Code2, ExternalLink, ShieldCheck } from "lucide-react";
+import { PortfolioProject } from "@/components/sections/Portfolio";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -17,12 +18,12 @@ export const revalidate = false;
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   
-  let projectDoc: any = null;
+  let projectDoc: PortfolioProject | null = null;
   try {
     const q = query(collection(db, "portfolioProjects"), where("slug", "==", slug));
     const snap = await getDocs(q);
     if (!snap.empty) {
-      projectDoc = snap.docs[0].data();
+      projectDoc = { id: snap.docs[0].id, ...snap.docs[0].data() } as PortfolioProject;
     }
   } catch (err) {
     console.error("Error fetching metadata for portfolio:", err);
@@ -82,12 +83,12 @@ export async function generateStaticParams() {
 export default async function PortfolioProjectPage({ params }: PageProps) {
   const { slug } = await params;
 
-  let dbProject: any = null;
+  let dbProject: PortfolioProject | null = null;
   try {
     const q = query(collection(db, "portfolioProjects"), where("slug", "==", slug));
     const snap = await getDocs(q);
     if (!snap.empty) {
-      dbProject = { id: snap.docs[0].id, ...snap.docs[0].data() };
+      dbProject = { id: snap.docs[0].id, ...snap.docs[0].data() } as PortfolioProject;
     }
   } catch (err) {
     console.error("Error fetching portfolio data:", err);

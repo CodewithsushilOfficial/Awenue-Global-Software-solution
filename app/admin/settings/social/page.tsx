@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { collection, getDocs, doc, setDoc, deleteDoc, query } from "firebase/firestore";
+import { collection, getDocs, doc, setDoc, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import {
   Plus,
@@ -54,6 +54,11 @@ export default function AdminSocialSettingsPage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
+  const showFeedback = (type: "success" | "error", message: string) => {
+    setFeedback({ type, message });
+    setTimeout(() => setFeedback(null), 4000);
+  };
+
   const fetchSocialLinks = useCallback(async () => {
     try {
       const snap = await getDocs(collection(db, "socialLinks"));
@@ -73,13 +78,11 @@ export default function AdminSocialSettingsPage() {
   }, []);
 
   useEffect(() => {
-    fetchSocialLinks();
+    const timer = setTimeout(() => {
+      fetchSocialLinks();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [fetchSocialLinks]);
-
-  const showFeedback = (type: "success" | "error", message: string) => {
-    setFeedback({ type, message });
-    setTimeout(() => setFeedback(null), 4000);
-  };
 
   const handleOpenAdd = () => {
     const nextOrder = socialLinks.length > 0 
@@ -171,9 +174,10 @@ export default function AdminSocialSettingsPage() {
       showFeedback("success", `Social link ${isNew ? "added" : "updated"} successfully!`);
       setEditingLink(null);
       await fetchSocialLinks();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Save social link error:", err);
-      showFeedback("error", err?.message || "Failed to save. Please ensure URL starts with https://");
+      const errMsg = err instanceof Error ? err.message : "Failed to save. Please ensure URL starts with https://";
+      showFeedback("error", errMsg);
     } finally {
       setIsSaving(false);
     }
@@ -212,9 +216,10 @@ export default function AdminSocialSettingsPage() {
         prev.map((l) => (l.id === item.id ? { ...l, isActive: updatedStatus } : l))
       );
       showFeedback("success", `Social link status changed to ${updatedStatus ? "Active" : "Inactive"}.`);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Status toggle error:", err);
-      showFeedback("error", err?.message || "Failed to update link status.");
+      const errMsg = err instanceof Error ? err.message : "Failed to update link status.";
+      showFeedback("error", errMsg);
     }
   };
 
@@ -304,9 +309,10 @@ export default function AdminSocialSettingsPage() {
       showFeedback("success", "Social link deleted successfully.");
       setDeleteConfirmId(null);
       await fetchSocialLinks();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Delete error:", err);
-      showFeedback("error", err?.message || "Failed to delete social link.");
+      const errMsg = err instanceof Error ? err.message : "Failed to delete social link.";
+      showFeedback("error", errMsg);
     }
   };
 
@@ -322,7 +328,7 @@ export default function AdminSocialSettingsPage() {
             <Settings2 size={24} className="text-accent" /> Social Media Links
           </h1>
           <p className="text-text-muted text-xs sm:text-sm">
-            Manage the social media accounts displayed under "Stay Connected" in the website footer.
+            Manage the social media accounts displayed under &quot;Stay Connected&quot; in the website footer.
           </p>
         </div>
         <button

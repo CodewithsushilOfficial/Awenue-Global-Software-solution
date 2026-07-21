@@ -8,7 +8,6 @@ import "firebase/compat/auth";
 let adminApp: App | null = null;
 let adminDbInstance: Firestore | null = null;
 let adminAuthInstance: Auth | null = null;
-let hasAdminCert = false;
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyATYJjw7vTC6NMKtoODxzfBewMxgWBE--s",
@@ -116,7 +115,6 @@ export function getAdminApp(): App | null {
 
     if (getApps().length > 0) {
       adminApp = getApps()[0];
-      hasAdminCert = true;
       return adminApp;
     }
 
@@ -130,7 +128,6 @@ export function getAdminApp(): App | null {
           privateKey,
         }),
       });
-      hasAdminCert = true;
       console.log("[Firebase Admin] Service account initialized successfully with cert.");
       return adminApp;
     }
@@ -172,6 +169,21 @@ export function getAdminAuth(): Auth {
   return adminAuth;
 }
 
+interface CreateUserProperties {
+  uid?: string;
+  email: string;
+  displayName?: string;
+}
+
+interface UpdateUserProperties {
+  email?: string;
+  displayName?: string;
+}
+
+interface UserClaims {
+  role?: string;
+}
+
 // Client Fallback auth shim mapping Admin SDK functions to Client Compat/Firestore operations
 const adminAuthShim = {
   async getUserByEmail(email: string) {
@@ -192,7 +204,7 @@ const adminAuthShim = {
     };
   },
 
-  async createUser(properties: any) {
+  async createUser(properties: CreateUserProperties) {
     await ensureServerSignedIn();
     const uid = properties.uid || `usr-${Date.now()}`;
     await compatDb.collection("admins").doc(uid).set({
@@ -208,9 +220,9 @@ const adminAuthShim = {
     return { uid, email: properties.email };
   },
 
-  async updateUser(uid: string, properties: any) {
+  async updateUser(uid: string, properties: UpdateUserProperties) {
     await ensureServerSignedIn();
-    const updateData: Record<string, any> = {
+    const updateData: Record<string, string> = {
       updatedAt: new Date().toISOString(),
     };
     if (properties.email) {
@@ -224,7 +236,7 @@ const adminAuthShim = {
     return { uid };
   },
 
-  async setCustomUserClaims(uid: string, claims: any) {
+  async setCustomUserClaims(uid: string, claims: UserClaims) {
     await ensureServerSignedIn();
     await compatDb.collection("admins").doc(uid).set({
       role: claims.role || "admin",
@@ -251,7 +263,7 @@ const adminAuthShim = {
     return { users };
   },
 
-  async verifyIdToken(idToken: string) {
+  async verifyIdToken() {
     throw new Error("verifyIdToken not supported on client fallback.");
   }
 };

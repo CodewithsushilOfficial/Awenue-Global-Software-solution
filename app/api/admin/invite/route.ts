@@ -15,7 +15,7 @@ import { saveToFirestoreCollection } from "@/lib/firestore-saver";
 import { sendAdminInvitationEmail } from "@/lib/email-service";
 import { getAbsoluteUrl } from "@/lib/site-url";
 import { db as clientDb } from "@/lib/firebase";
-import { collection as clientCollection, getDocs, query, where, limit, doc as clientDoc, updateDoc as clientUpdateDoc, deleteDoc as clientDeleteDoc } from "firebase/firestore";
+import { collection as clientCollection, getDocs, query, where, limit, doc as clientDoc, updateDoc as clientUpdateDoc } from "firebase/firestore";
 import {
   hasPermission,
   canAssignRole,

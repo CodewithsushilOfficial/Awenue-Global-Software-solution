@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useModal } from "@/components/providers/ModalProvider";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 
 export default function Navigation() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -43,23 +44,23 @@ export default function Navigation() {
       >
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           {/* Logo */}
-          <a
+          <Link
             href="/"
             className="text-lg sm:text-xl font-extrabold tracking-wider text-text-secondary outline-none focus-visible:outline-2 focus-visible:outline-accent-tint focus-visible:outline-offset-2"
           >
             AWEN<span className="text-accent">UE</span>
-          </a>
+          </Link>
 
           {/* Desktop Nav Links */}
           <div className="hidden md:flex items-center gap-8">
             {navLinks.map((link) => (
-              <a
+              <Link
                 key={link.name}
                 href={link.href}
                 className="text-nav-link text-text-muted hover:text-text-secondary transition-colors outline-none focus-visible:outline-2 focus-visible:outline-accent-tint focus-visible:outline-offset-2"
               >
                 {link.name}
-              </a>
+              </Link>
             ))}
           </div>
 
@@ -94,14 +95,14 @@ export default function Navigation() {
       >
         <div className="flex flex-col gap-6">
           {navLinks.map((link) => (
-            <a
+            <Link
               key={link.name}
               href={link.href}
               onClick={() => setIsMobileMenuOpen(false)}
               className="text-2xl font-extrabold text-text-secondary hover:text-accent transition-colors"
             >
               {link.name}
-            </a>
+            </Link>
           ))}
         </div>
 

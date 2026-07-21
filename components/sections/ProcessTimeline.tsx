@@ -5,18 +5,34 @@ import Image from "next/image";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { motion } from "motion/react";
-import { Quote, Sparkles, CheckCircle2 } from "lucide-react";
+import { Quote, Sparkles, CheckCircle2, LucideIcon } from "lucide-react";
 import * as Icons from "lucide-react";
 
-function getIconComponent(name: string) {
-  const IconComponent = (Icons as any)[name];
+export interface ProcessStepItem {
+  num: string;
+  name: string;
+  desc: string;
+  highlights?: readonly string[] | string[];
+  image?: string;
+  tag?: string;
+  color?: string;
+  colorRgb?: string;
+  side?: string;
+  id?: string;
+  displayOrder?: number;
+  icon?: LucideIcon;
+  iconName?: string;
+}
+
+function getIconComponent(name: string): LucideIcon {
+  const IconComponent = (Icons as unknown as Record<string, LucideIcon>)[name];
   return IconComponent || Icons.HelpCircle;
 }
 
 gsap.registerPlugin(ScrollTrigger);
 
 // ─── STEP DATA ────────────────────────────────────────────────────────────────
-const STEPS = [
+const STEPS: ProcessStepItem[] = [
   {
     num: "01",
     name: "Discover",
@@ -202,7 +218,7 @@ function StepCard({ step }: { step: typeof STEPS[number] }) {
                 color: step.color,
               }}
             >
-              <Icon size={16} />
+              {Icon && <Icon size={16} />}
             </div>
           </div>
 
@@ -223,7 +239,7 @@ function StepCard({ step }: { step: typeof STEPS[number] }) {
         {/* Deliverables / Highlights list */}
         <div>
           <div className="grid grid-cols-1 gap-1.5 pt-2 border-t border-white/10">
-            {step.highlights.map((h, i) => (
+            {step.highlights?.map((h, i) => (
               <div key={i} className="flex items-center gap-2">
                 <CheckCircle2 size={12} className="shrink-0" style={{ color: step.color }} />
                 <span className="text-[11px] font-semibold text-white/80">{h}</span>
@@ -289,7 +305,7 @@ function StepVisual({ step }: { step: typeof STEPS[number] }) {
     >
       {/* Background Image — Clear & Crisp */}
       <Image
-        src={step.image}
+        src={step.image || "/images/process/discover.jpg"}
         alt={step.name}
         fill
         className="object-cover object-center group-hover:scale-106 transition-transform duration-700 ease-out"
@@ -491,7 +507,7 @@ function QuoteBlock() {
 }
 
 // ─── MOBILE TIMELINE ──────────────────────────────────────────────────────────
-function MobileTimeline({ steps }: { steps: readonly any[] }) {
+function MobileTimeline({ steps }: { steps: readonly ProcessStepItem[] }) {
   return (
     <div className="lg:hidden relative pl-8 border-l border-accent/20 space-y-8">
       {steps.map((step) => {
@@ -522,7 +538,7 @@ function MobileTimeline({ steps }: { steps: readonly any[] }) {
               {/* Image preview banner */}
               <div className="relative h-36 w-full">
                 <Image
-                  src={step.image}
+                  src={step.image || "/images/process/discover.jpg"}
                   alt={step.name}
                   fill
                   className="object-cover"
@@ -553,13 +569,13 @@ function MobileTimeline({ steps }: { steps: readonly any[] }) {
               <div className="p-5 pt-2">
                 <div className="flex items-center gap-2.5 mb-2">
                   <div className="w-7 h-7 rounded-lg flex items-center justify-center border shrink-0" style={{ background: `rgba(${step.colorRgb},0.12)`, borderColor: `rgba(${step.colorRgb},0.3)`, color: step.color }}>
-                    <Icon size={14} />
+                    {Icon && <Icon size={14} />}
                   </div>
                   <h3 className="font-bold text-text-secondary text-lg">{step.name}</h3>
                 </div>
                 <p className="text-xs text-white/70 leading-relaxed mb-3">{step.desc}</p>
                 <div className="grid grid-cols-1 gap-1 pt-2 border-t border-white/10">
-                  {step.highlights.map((h: string, idx: number) => (
+                  {step.highlights?.map((h: string, idx: number) => (
                     <div key={idx} className="flex items-center gap-2">
                       <CheckCircle2 size={11} style={{ color: step.color }} />
                       <span className="text-[11px] font-medium text-white/80">{h}</span>
@@ -576,11 +592,11 @@ function MobileTimeline({ steps }: { steps: readonly any[] }) {
 }
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
-export default function ProcessTimeline({ initialSteps }: { initialSteps?: any[] }) {
+export default function ProcessTimeline({ initialSteps }: { initialSteps?: ProcessStepItem[] }) {
   const steps = (initialSteps && initialSteps.length > 0)
     ? initialSteps.map((step) => ({
         ...step,
-        icon: step.iconName ? getIconComponent(step.iconName) : (Icons as any)[step.iconName || step.name] || Icons.HelpCircle
+        icon: step.iconName ? getIconComponent(step.iconName) : (Icons as unknown as Record<string, LucideIcon>)[step.iconName || step.name] || Icons.HelpCircle
       }))
     : STEPS;
 

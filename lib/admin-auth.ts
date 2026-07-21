@@ -12,7 +12,7 @@
  * 5. Returns authorized AdminRecord or denies access for unauthorized accounts
  */
 
-import { getAdminDb, getAdminAuth, ensureServerSignedIn, adminDb, adminAuth } from "@/lib/firebase-admin";
+import { ensureServerSignedIn, adminDb, adminAuth } from "@/lib/firebase-admin";
 import { getSessionFromRequest } from "@/lib/session";
 import {
   hasPermission,

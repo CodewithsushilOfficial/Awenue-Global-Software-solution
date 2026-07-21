@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { ImageIcon, X, Loader2, AlertCircle } from 'lucide-react';
 
 interface ImageUrlFieldProps {
@@ -36,24 +36,24 @@ export default function ImageUrlField({
   placeholder = 'https://example.com/image.jpg',
   className = '',
 }: ImageUrlFieldProps) {
+  const [prevValue, setPrevValue] = useState<string>('');
   const [previewState, setPreviewState] = useState<PreviewState>('empty');
   const [previewSrc, setPreviewSrc] = useState<string>('');
 
-  useEffect(() => {
+  if (value !== prevValue) {
+    setPrevValue(value);
     const trimmed = value.trim();
     if (!trimmed) {
       setPreviewState('empty');
       setPreviewSrc('');
-      return;
-    }
-    if (!validateImageUrl(trimmed)) {
+    } else if (!validateImageUrl(trimmed)) {
       setPreviewState('invalid-url');
       setPreviewSrc('');
-      return;
+    } else {
+      setPreviewState('loading');
+      setPreviewSrc(trimmed);
     }
-    setPreviewState('loading');
-    setPreviewSrc(trimmed);
-  }, [value]);
+  }
 
   const handleImageLoad = () => setPreviewState('valid');
   const handleImageError = () => setPreviewState('load-error');

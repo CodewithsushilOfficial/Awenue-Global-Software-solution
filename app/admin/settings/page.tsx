@@ -27,7 +27,7 @@ export default function AdminSettingsPage() {
 
   useEffect(() => {
     let active = true;
-    const unsubscribe = auth.onAuthStateChanged((user) => {
+    const unsubscribe = auth.onAuthStateChanged(() => {
       if (!active) return;
 
       async function loadSettings() {

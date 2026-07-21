@@ -53,7 +53,6 @@ const faqs = [
 export default async function ContactPage() {
   let contactEmail = "hello@awenue.io";
   let contactPhone = "+91 98765 43210";
-  let whatsappNumber = "+91 98765 43210";
   let businessAddress = "Varanasi, Uttar Pradesh 221001, India";
 
   try {
@@ -62,7 +61,6 @@ export default async function ContactPage() {
       const data = snap.data();
       contactEmail = data.businessEmail || contactEmail;
       contactPhone = data.contactPhone || contactPhone;
-      whatsappNumber = data.whatsappNumber || whatsappNumber;
       businessAddress = data.businessAddress || businessAddress;
     }
   } catch (err) {
