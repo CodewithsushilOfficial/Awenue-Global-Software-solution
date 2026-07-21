@@ -1,6 +1,7 @@
 import Navigation from "@/components/sections/Navigation";
 import GSAPScrollEffects from "@/components/motion/GSAPScrollEffects";
 import Hero from "@/components/sections/Hero";
+import TrustedTechStack, { Technology } from "@/components/sections/TrustedTechStack";
 import TrustBar from "@/components/sections/TrustBar";
 import Services from "@/components/sections/Services";
 import Products from "@/components/sections/Products";
@@ -47,15 +48,17 @@ export default async function Home() {
   let homepageContent: HomepageContent | null = null;
   const socialLinks: SocialLink[] = [];
   const processSteps: ProcessStepItem[] = [];
+  const technologies: Technology[] = [];
 
   try {
-    const [servicesSnap, productsSnap, portfolioSnap, contentSnap, socialSnap, processSnap] = await Promise.all([
+    const [servicesSnap, productsSnap, portfolioSnap, contentSnap, socialSnap, processSnap, techSnap] = await Promise.all([
       getDocs(collection(db, "services")),
       getDocs(collection(db, "products")),
       getDocs(collection(db, "portfolioProjects")),
       getDoc(doc(db, "websiteContent", "homepage")),
       getDocs(collection(db, "socialLinks")),
       getDocs(collection(db, "processSteps")),
+      getDocs(collection(db, "technologies")),
     ]);
 
     if (!servicesSnap.empty) {
@@ -113,6 +116,17 @@ export default async function Home() {
       // Sort by displayOrder ascending
       processSteps.sort((a, b) => (Number(a.displayOrder) || 0) - (Number(b.displayOrder) || 0));
     }
+
+    if (!techSnap.empty) {
+      techSnap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.isActive !== false) {
+          technologies.push({ id: docSnap.id, ...data } as Technology);
+        }
+      });
+      // Sort by displayOrder ascending
+      technologies.sort((a, b) => (Number(a.displayOrder) || 0) - (Number(b.displayOrder) || 0));
+    }
   } catch (err) {
     console.error("[SERVER FETCH] Failed to load homepage CMS content:", err);
   }
@@ -124,6 +138,7 @@ export default async function Home() {
   const safeContent = homepageContent ? (JSON.parse(JSON.stringify(homepageContent)) as HomepageContent) : null;
   const safeSocialLinks = JSON.parse(JSON.stringify(socialLinks)) as SocialLink[];
   const safeProcessSteps = JSON.parse(JSON.stringify(processSteps)) as ProcessStepItem[];
+  const safeTechnologies = JSON.parse(JSON.stringify(technologies)) as Technology[];
 
   // Extract content chunks for individual components
   const heroCmsContent = safeContent
@@ -162,7 +177,7 @@ export default async function Home() {
       <Navigation />
       <main className="grow">
         <Hero initialCmsContent={heroCmsContent} />
-        <TrustBar />
+        <TrustBar initialTechnologies={safeTechnologies} />
         <Services initialServices={safeServices} />
         <Products initialProducts={safeProducts} />
         <Portfolio initialProjects={safePortfolio} />

@@ -26,6 +26,7 @@ import {
   UserCog,
   Lock,
   ArrowLeft,
+  Cpu,
   Share2,
 } from "lucide-react";
 
@@ -84,6 +85,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         { name: "Services", href: "/admin/services", icon: Briefcase, permission: "services.view" },
         { name: "Products", href: "/admin/products", icon: Package, permission: "products.view" },
         { name: "Our Process", href: "/admin/process", icon: Layers, permission: "process.view" },
+        { name: "Technology Stack", href: "/admin/technologies", icon: Cpu, permission: "content.view" },
         { name: "Portfolio / Work", href: "/admin/portfolio", icon: FolderKanban, permission: "portfolio.view" },
       ],
     },
@@ -133,6 +135,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     "/admin/services": "services.view",
     "/admin/products": "products.view",
     "/admin/process": "process.view",
+    "/admin/technologies": "content.view",
     "/admin/portfolio": "portfolio.view",
     "/admin/users": "users.view",
     "/admin/inquiries": "inquiries.view",
