@@ -232,6 +232,7 @@ export default function AdminProductsPage() {
         } else {
           await addDoc(collection(db, "products"), { ...payload, createdAt: new Date().toISOString() });
         }
+        fetch("/api/revalidate", { method: "POST" }).catch(() => {});
       }
 
       setFeedback(isEdit ? "Product updated successfully." : "New product created successfully.");
@@ -248,6 +249,7 @@ export default function AdminProductsPage() {
         }
         setEditingProduct(null);
         fetchProducts();
+        fetch("/api/revalidate", { method: "POST" }).catch(() => {});
       } catch (fErr) {
         console.error("Fallback product save failed:", fErr);
       }
@@ -282,6 +284,7 @@ export default function AdminProductsPage() {
         setProducts((prev) =>
           prev.map((item) => (item.id === product.id ? { ...item, published: !item.published } : item))
         );
+        fetch("/api/revalidate", { method: "POST" }).catch(() => {});
       } catch (fErr) {
         console.error("Fallback publish toggle failed:", fErr);
       }

@@ -64,12 +64,13 @@ const DEFAULT_PROJECTS: PortfolioProject[] = [
   },
 ];
 
-export default function Portfolio() {
+export default function Portfolio({ initialProjects }: { initialProjects?: PortfolioProject[] }) {
   const { openModal } = useModal();
-  const [projects, setProjects] = useState<PortfolioProject[]>(DEFAULT_PROJECTS);
+  const [projects, setProjects] = useState<PortfolioProject[]>(initialProjects || DEFAULT_PROJECTS);
   const [activeTab, setActiveTab] = useState<string>("All");
 
   useEffect(() => {
+    if (initialProjects && initialProjects.length > 0) return;
     async function fetchPortfolio() {
       try {
         const snap = await getDocs(collection(db, "portfolioProjects"));
@@ -91,7 +92,7 @@ export default function Portfolio() {
       }
     }
     fetchPortfolio();
-  }, []);
+  }, [initialProjects]);
 
   const categories = ["All", "AWENUE Product", "Client Project", "Personal Project"];
 
@@ -163,6 +164,8 @@ export default function Portfolio() {
                         <img
                           src={src}
                           alt={alt}
+                          loading="lazy"
+                          decoding="async"
                           className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;

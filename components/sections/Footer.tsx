@@ -8,19 +8,28 @@ import { Loader2, MapPin, Mail, ArrowRight, CheckCircle2 } from "lucide-react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-export default function Footer() {
+export interface FooterCmsContent {
+  footerBrandDesc?: string;
+  footerAddress?: string;
+  footerEmail?: string;
+  footerCopyright?: string;
+}
+
+export default function Footer({ initialCmsContent }: { initialCmsContent?: FooterCmsContent }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
   const [cmsData, setCmsData] = useState({
     footerBrandDesc:
+      initialCmsContent?.footerBrandDesc ||
       "We build high-converting websites, mobile applications, scalable SaaS platforms, and custom AI automation for forward-thinking businesses.",
-    footerAddress: "Varanasi, Uttar Pradesh, India",
-    footerEmail: "hello@awenue.io",
-    footerCopyright: "© 2026 Avenue Global Software Solutions. All Rights Reserved.",
+    footerAddress: initialCmsContent?.footerAddress || "Varanasi, Uttar Pradesh, India",
+    footerEmail: initialCmsContent?.footerEmail || "hello@awenue.io",
+    footerCopyright: initialCmsContent?.footerCopyright || "© 2026 Avenue Global Software Solutions. All Rights Reserved.",
   });
 
   useEffect(() => {
+    if (initialCmsContent) return; // Skip client-side load if server pre-loaded
     async function loadFooterCms() {
       try {
         const snap = await getDoc(doc(db, "websiteContent", "homepage"));
@@ -49,7 +58,7 @@ export default function Footer() {
       }
     }
     loadFooterCms();
-  }, []);
+  }, [initialCmsContent]);
 
   const {
     register,

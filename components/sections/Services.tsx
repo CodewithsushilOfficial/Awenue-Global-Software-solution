@@ -412,7 +412,7 @@ function BottomCTA({ onOpen }: { onOpen: () => void }) {
     >
       {/* Background Image */}
       <Image
-        src="/images/digital_growth.png"
+        src="/images/digital_growth.webp"
         alt="Digital Growth"
         fill
         className="object-cover object-center opacity-30 scale-105"
@@ -572,11 +572,37 @@ export interface ServiceItem {
 }
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
-export default function Services() {
+export default function Services({ initialServices }: { initialServices?: any[] }) {
   const { openModal } = useModal();
-  const [servicesList, setServicesList] = useState<ServiceItem[]>([...SERVICES]);
+  
+  const [servicesList, setServicesList] = useState<ServiceItem[]>(() => {
+    if (initialServices && initialServices.length > 0) {
+      return initialServices.map((data: any) => {
+        const defaultMatch = SERVICES.find((s) => s.id === data.id || s.title.toLowerCase() === data.title?.toLowerCase());
+        return {
+          id: data.id,
+          num: String(data.displayOrder || 1).padStart(2, "0"),
+          icon: defaultMatch ? defaultMatch.icon : Globe,
+          image: defaultMatch ? defaultMatch.image : "/images/services/web-dev.jpg",
+          color: defaultMatch ? defaultMatch.color : "#3B82F6",
+          colorRgb: defaultMatch ? defaultMatch.colorRgb : "59,130,246",
+          colorClass: defaultMatch ? defaultMatch.colorClass : "text-blue-400",
+          badgeBg: defaultMatch ? defaultMatch.badgeBg : "bg-blue-500/15 border-blue-400/30",
+          title: data.title,
+          subtitle: data.shortDescription || (defaultMatch ? defaultMatch.subtitle : "Build a Powerful Digital Presence."),
+          desc: data.detailedDescription || data.shortDescription,
+          features: data.features || (defaultMatch ? defaultMatch.features : []),
+          cta: data.ctaLabel || "Explore Service",
+          modalKey: "Website",
+          displayOrder: data.displayOrder ?? 99,
+        };
+      }).sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+    }
+    return [...SERVICES];
+  });
 
   useEffect(() => {
+    if (initialServices && initialServices.length > 0) return;
     async function loadServices() {
       try {
         const snap = await getDocs(collection(db, "services"));
@@ -615,7 +641,7 @@ export default function Services() {
       }
     }
     loadServices();
-  }, []);
+  }, [initialServices]);
 
   return (
     <section id="services" className="bg-surface-base text-text-secondary py-24 sm:py-32 relative overflow-hidden">

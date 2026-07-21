@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb, isAdminCertAvailable } from "@/lib/firebase-admin";
 import { collection as clientCollection, getDocs, query, orderBy } from "firebase/firestore";
 import { db as clientDb } from "@/lib/firebase";
+import { revalidatePath } from "next/cache";
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,6 +38,19 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Helper to revalidate homepage on-demand for relevant collections
+function triggerHomepageRevalidation(collectionName: string) {
+  const homepageCollections = ["services", "products", "portfolioProjects", "websiteContent", "siteContent", "adminSettings"];
+  if (homepageCollections.includes(collectionName)) {
+    try {
+      revalidatePath("/");
+      console.log(`[REVALIDATE] Homepage revalidated via CMS API for: ${collectionName}`);
+    } catch (err) {
+      console.error("[REVALIDATE] Error in revalidatePath:", err);
+    }
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -60,6 +74,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Document ID is required for deletion." }, { status: 400 });
           }
           await targetCollection.doc(docId).delete();
+          triggerHomepageRevalidation(collectionName);
           return NextResponse.json({ success: true, message: "Document deleted successfully." });
         }
 
@@ -69,6 +84,7 @@ export async function POST(request: NextRequest) {
             createdAt: data?.createdAt || nowISO,
             updatedAt: nowISO,
           });
+          triggerHomepageRevalidation(collectionName);
           return NextResponse.json({ success: true, id: docRef.id, message: "Document added successfully." });
         }
 
@@ -77,6 +93,7 @@ export async function POST(request: NextRequest) {
             ...data,
             updatedAt: nowISO,
           });
+          triggerHomepageRevalidation(collectionName);
           return NextResponse.json({ success: true, id: docId, message: "Document updated successfully." });
         }
 
@@ -89,6 +106,7 @@ export async function POST(request: NextRequest) {
           { merge: true }
         );
 
+        triggerHomepageRevalidation(collectionName);
         return NextResponse.json({ success: true, id: docId, message: "CMS content saved successfully." });
       }
     }

@@ -9,18 +9,28 @@ import { ArrowRight, Sparkles, MessageSquare, ShieldCheck, Zap } from "lucide-re
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-export default function FinalCTA() {
+export interface FinalCtaCmsContent {
+  finalCtaEyebrow?: string;
+  finalCtaHeading?: string;
+  finalCtaDescription?: string;
+  finalCtaPrimary?: string;
+  finalCtaSecondary?: string;
+}
+
+export default function FinalCTA({ initialCmsContent }: { initialCmsContent?: FinalCtaCmsContent }) {
   const { openModal } = useModal();
   const [cmsContent, setCmsContent] = useState({
-    finalCtaEyebrow: "LET'S BUILD SOMETHING GREAT",
-    finalCtaHeading: "Ready to Take Your Business Digital?",
+    finalCtaEyebrow: initialCmsContent?.finalCtaEyebrow || "LET'S BUILD SOMETHING GREAT",
+    finalCtaHeading: initialCmsContent?.finalCtaHeading || "Ready to Take Your Business Digital?",
     finalCtaDescription:
+      initialCmsContent?.finalCtaDescription ||
       "Whether you need your first website, have a new product idea, or want to automate and grow your existing business — let's make it happen together.",
-    finalCtaPrimary: "Start Your Project",
-    finalCtaSecondary: "Get Free Consultation",
+    finalCtaPrimary: initialCmsContent?.finalCtaPrimary || "Start Your Project",
+    finalCtaSecondary: initialCmsContent?.finalCtaSecondary || "Get Free Consultation",
   });
 
   useEffect(() => {
+    if (initialCmsContent) return; // Skip client-side load if server pre-loaded
     async function loadCms() {
       try {
         const snap = await getDoc(doc(db, "websiteContent", "homepage"));
@@ -39,7 +49,7 @@ export default function FinalCTA() {
       }
     }
     loadCms();
-  }, []);
+  }, [initialCmsContent]);
 
   return (
     <section

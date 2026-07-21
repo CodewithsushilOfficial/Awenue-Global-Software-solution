@@ -62,7 +62,16 @@ const trustItems = [
 const SLIDE_DURATION = 6000;    // ms each slide is visible (6s)
 const TRANSITION_DURATION = 1500; // ms crossfade (1.5s smooth)
 
-export default function Hero() {
+export interface HeroCmsContent {
+  heroEyebrow?: string;
+  heroHeading?: string;
+  heroHighlight?: string;
+  heroDescription?: string;
+  heroPrimaryCta?: string;
+  heroSecondaryCta?: string;
+}
+
+export default function Hero({ initialCmsContent }: { initialCmsContent?: HeroCmsContent }) {
   const { openModal } = useModal();
   const prefersReducedMotion = useReducedMotion();
 
@@ -71,16 +80,18 @@ export default function Hero() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [cmsContent, setCmsContent] = useState({
-    heroEyebrow: "YOUR DIGITAL GROWTH PARTNER",
-    heroHeading: "We Build Digital Solutions That",
-    heroHighlight: "Turn Ideas Into Growth.",
+    heroEyebrow: initialCmsContent?.heroEyebrow || "YOUR DIGITAL GROWTH PARTNER",
+    heroHeading: initialCmsContent?.heroHeading || "We Build Digital Solutions That",
+    heroHighlight: initialCmsContent?.heroHighlight || "Turn Ideas Into Growth.",
     heroDescription:
+      initialCmsContent?.heroDescription ||
       "From websites and mobile apps to SaaS products and AI automation — we build technology that helps your business move forward.",
-    heroPrimaryCta: "Start Your Project",
-    heroSecondaryCta: "Get Free Consultation",
+    heroPrimaryCta: initialCmsContent?.heroPrimaryCta || "Start Your Project",
+    heroSecondaryCta: initialCmsContent?.heroSecondaryCta || "Get Free Consultation",
   });
 
   useEffect(() => {
+    if (initialCmsContent) return; // Skip client-side load if server pre-loaded
     async function loadCms() {
       try {
         const snap = await getDoc(doc(db, "websiteContent", "homepage"));
@@ -113,7 +124,7 @@ export default function Hero() {
       }
     }
     loadCms();
-  }, []);
+  }, [initialCmsContent]);
 
 
   // Advance slide

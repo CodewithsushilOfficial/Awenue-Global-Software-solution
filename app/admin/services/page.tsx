@@ -269,6 +269,7 @@ export default function AdminServicesPage() {
         } else {
           await addDoc(collection(db, "services"), { ...payload, createdAt: new Date().toISOString() });
         }
+        fetch("/api/revalidate", { method: "POST" }).catch(() => {});
       }
 
       setFeedback(isEdit ? "Service updated successfully." : "New service created successfully.");
@@ -285,6 +286,7 @@ export default function AdminServicesPage() {
         }
         setEditingService(null);
         fetchServices();
+        fetch("/api/revalidate", { method: "POST" }).catch(() => {});
       } catch (fErr) {
         console.error("Fallback service save failed:", fErr);
       }
@@ -319,6 +321,7 @@ export default function AdminServicesPage() {
         setServices((prev) =>
           prev.map((item) => (item.id === service.id ? { ...item, published: !item.published } : item))
         );
+        fetch("/api/revalidate", { method: "POST" }).catch(() => {});
       } catch (fErr) {
         console.error("Fallback publish toggle failed:", fErr);
       }

@@ -60,7 +60,7 @@ const DEFAULT_PRODUCTS: ProductItem[] = [
     ctaLabel: "Visit ERP Website",
     displayOrder: 2,
     published: true,
-    image: "/images/web_design.png",
+    image: "/images/web_design.webp",
     imageAlt: "Awenue College ERP Platform Preview",
     accentColor: "#06B6D4",
     accentRgb: "6,182,212",
@@ -84,11 +84,12 @@ const DEFAULT_PRODUCTS: ProductItem[] = [
   },
 ];
 
-export default function Products() {
+export default function Products({ initialProducts }: { initialProducts?: ProductItem[] }) {
   const { openModal } = useModal();
-  const [products, setProducts] = useState<ProductItem[]>(DEFAULT_PRODUCTS);
+  const [products, setProducts] = useState<ProductItem[]>(initialProducts || DEFAULT_PRODUCTS);
 
   useEffect(() => {
+    if (initialProducts && initialProducts.length > 0) return;
     async function fetchProducts() {
       try {
         const snap = await getDocs(collection(db, "products"));
@@ -110,7 +111,7 @@ export default function Products() {
       }
     }
     fetchProducts();
-  }, []);
+  }, [initialProducts]);
 
   return (
     <section
@@ -231,10 +232,15 @@ function ProductCard({
                 <img
                   src={src}
                   alt={alt}
+                  loading="lazy"
+                  decoding="async"
                   className={`w-full h-full object-cover object-center transition-transform duration-700 ease-out ${
                     hovered && isLive ? "scale-108" : "scale-100"
                   } ${!isLive ? "grayscale opacity-60" : "opacity-95"}`}
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.src = "/images/services/saas.jpg";
+                  }}
                 />
               );
             }

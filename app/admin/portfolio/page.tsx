@@ -231,6 +231,7 @@ export default function AdminPortfolioPage() {
         } else {
           await addDoc(collection(db, "portfolioProjects"), { ...payload, createdAt: new Date().toISOString() });
         }
+        fetch("/api/revalidate", { method: "POST" }).catch(() => {});
       }
 
       setFeedback(isEdit ? "Portfolio project updated." : "New portfolio project created.");
@@ -247,6 +248,7 @@ export default function AdminPortfolioPage() {
         }
         setEditingProject(null);
         fetchProjects();
+        fetch("/api/revalidate", { method: "POST" }).catch(() => {});
       } catch (fErr) {
         console.error("Fallback portfolio save failed:", fErr);
       }
@@ -281,6 +283,7 @@ export default function AdminPortfolioPage() {
         setProjects((prev) =>
           prev.map((item) => (item.id === project.id ? { ...item, published: !item.published } : item))
         );
+        fetch("/api/revalidate", { method: "POST" }).catch(() => {});
       } catch (fErr) {
         console.error("Fallback publish toggle failed:", fErr);
       }
