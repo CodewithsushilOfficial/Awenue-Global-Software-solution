@@ -5,8 +5,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { newsletterSchema, type NewsletterFormValues } from "@/lib/validations";
 import { Loader2, MapPin, Mail, ArrowRight, CheckCircle2 } from "lucide-react";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import SocialIcon from "@/components/icons/SocialIcons";
 
 export interface FooterCmsContent {
   footerBrandDesc?: string;
@@ -15,9 +16,27 @@ export interface FooterCmsContent {
   footerCopyright?: string;
 }
 
-export default function Footer({ initialCmsContent }: { initialCmsContent?: FooterCmsContent }) {
+export interface SocialLink {
+  id: string;
+  platform: string;
+  displayName: string;
+  url: string;
+  isActive: boolean;
+  displayOrder: number;
+  openInNewTab: boolean;
+  ariaLabel: string;
+}
+
+export default function Footer({
+  initialCmsContent,
+  initialSocialLinks,
+}: {
+  initialCmsContent?: FooterCmsContent;
+  initialSocialLinks?: SocialLink[];
+}) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [socialLinks, setSocialLinks] = useState<SocialLink[]>(initialSocialLinks || []);
 
   const [cmsData, setCmsData] = useState({
     footerBrandDesc:
@@ -59,6 +78,28 @@ export default function Footer({ initialCmsContent }: { initialCmsContent?: Foot
     }
     loadFooterCms();
   }, [initialCmsContent]);
+
+  useEffect(() => {
+    if (initialSocialLinks) return; // Skip client-side load if server pre-loaded
+    async function loadSocialLinks() {
+      try {
+        const snap = await getDocs(collection(db, "socialLinks"));
+        const links: SocialLink[] = [];
+        snap.forEach((docSnap) => {
+          const data = docSnap.data();
+          if (data.isActive !== false) {
+            links.push({ id: docSnap.id, ...data } as SocialLink);
+          }
+        });
+        // Sort by displayOrder ascending
+        links.sort((a, b) => (Number(a.displayOrder) || 0) - (Number(b.displayOrder) || 0));
+        setSocialLinks(links);
+      } catch (err) {
+        console.warn("Footer social links load notice:", err);
+      }
+    }
+    loadSocialLinks();
+  }, [initialSocialLinks]);
 
   const {
     register,
@@ -271,6 +312,25 @@ export default function Footer({ initialCmsContent }: { initialCmsContent?: Foot
                 </p>
               )}
             </form>
+
+            {/* Social Media Links */}
+            {socialLinks && socialLinks.length > 0 && (
+              <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-white/5 mt-4">
+                {socialLinks.map((link) => (
+                  <a
+                    key={link.id}
+                    href={link.url}
+                    title={link.displayName}
+                    aria-label={link.ariaLabel || `Visit AWENUE on ${link.displayName}`}
+                    target={link.openInNewTab !== false ? "_blank" : undefined}
+                    rel={link.openInNewTab !== false ? "noopener noreferrer" : undefined}
+                    className="w-9 h-9 rounded-xl bg-surface-raised border border-white/10 flex items-center justify-center text-text-muted hover:text-accent hover:border-accent/40 hover:shadow-glow transition-all duration-300 transform hover:scale-110 focus-visible:scale-110 focus-visible:text-accent focus-visible:border-accent/40 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
+                  >
+                    <SocialIcon platform={link.platform} className="w-4.5 h-4.5" />
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

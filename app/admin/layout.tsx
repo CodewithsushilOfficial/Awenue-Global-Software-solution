@@ -26,6 +26,7 @@ import {
   UserCog,
   Lock,
   ArrowLeft,
+  Share2,
 } from "lucide-react";
 
 interface NavItem {
@@ -105,6 +106,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       label: "CONFIGURATION",
       items: [
         { name: "Website Settings", href: "/admin/settings", icon: Settings, permission: "settings.view" },
+        { name: "Social Media Links", href: "/admin/settings/social", icon: Share2, permission: "settings.view" },
       ],
     },
     {
@@ -138,6 +140,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     "/admin/queries": "inquiries.view",
     "/admin/communication": "inquiries.view",
     "/admin/settings": "settings.view",
+    "/admin/settings/social": "settings.view",
     "/admin/profile": "dashboard.view",
     "/admin/admins": "admins.view",
   };

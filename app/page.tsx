@@ -19,13 +19,15 @@ export default async function Home() {
   let products: any[] = [];
   let portfolioProjects: any[] = [];
   let homepageContent: any = null;
+  let socialLinks: any[] = [];
 
   try {
-    const [servicesSnap, productsSnap, portfolioSnap, contentSnap] = await Promise.all([
+    const [servicesSnap, productsSnap, portfolioSnap, contentSnap, socialSnap] = await Promise.all([
       getDocs(collection(db, "services")),
       getDocs(collection(db, "products")),
       getDocs(collection(db, "portfolioProjects")),
       getDoc(doc(db, "websiteContent", "homepage")),
+      getDocs(collection(db, "socialLinks")),
     ]);
 
     if (!servicesSnap.empty) {
@@ -63,6 +65,17 @@ export default async function Home() {
         homepageContent = { id: altSnap.id, ...altSnap.data() };
       }
     }
+
+    if (!socialSnap.empty) {
+      socialSnap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.isActive !== false) {
+          socialLinks.push({ id: docSnap.id, ...data });
+        }
+      });
+      // Sort by displayOrder ascending
+      socialLinks.sort((a, b) => (Number(a.displayOrder) || 0) - (Number(b.displayOrder) || 0));
+    }
   } catch (err) {
     console.error("[SERVER FETCH] Failed to load homepage CMS content:", err);
   }
@@ -72,6 +85,7 @@ export default async function Home() {
   const safeProducts = JSON.parse(JSON.stringify(products));
   const safePortfolio = JSON.parse(JSON.stringify(portfolioProjects));
   const safeContent = homepageContent ? JSON.parse(JSON.stringify(homepageContent)) : null;
+  const safeSocialLinks = JSON.parse(JSON.stringify(socialLinks));
 
   // Extract content chunks for individual components
   const heroCmsContent = safeContent
@@ -116,7 +130,7 @@ export default async function Home() {
         <ProcessTimeline />
         <FinalCTA initialCmsContent={finalCtaCmsContent} />
       </main>
-      <Footer initialCmsContent={footerCmsContent} />
+      <Footer initialCmsContent={footerCmsContent} initialSocialLinks={safeSocialLinks} />
     </>
   );
 }
