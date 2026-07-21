@@ -264,92 +264,93 @@ function ProductCardItem({
   delay: number;
   onCTA: () => void;
 }) {
+  const { openModal } = useModal();
   const [isFlipped, setIsFlipped] = useState(false);
   const isLive = product.productStatus === "live";
-  const imgSrc = product.imageUrl || product.image || "/images/services/saas.jpg";
-  const ProductIcon = getProductIcon(product.slug || product.id);
+  const getProductImage = (p: ProductItem) => {
+    const s = (p.slug || p.id || p.name || "").toLowerCase();
+    if (s.includes("crm")) return "/images/products/awenue-crm-dashboard.png";
+    if (s.includes("erp") || s.includes("college") || s.includes("school")) return "/images/products/awenue-college-erp-dashboard.png";
+    if (s.includes("hospital") || s.includes("healthcare") || s.includes("clinic")) return "/images/products/awenue-hospital-management-dashboard.png";
+    return p.imageUrl || p.image || "/images/products/awenue-crm-dashboard.png";
+  };
+
+  const imgSrc = getProductImage(product);
   // Enforce Main AWENUE Brand Emerald Green (#09B850) Across All Products
   const accentColor = "#09B850";
   const accentRgb = "9,184,80";
 
   return (
     <RevealOnScroll delay={delay}>
-      <div className="flex flex-col gap-4 h-full group">
-        {/* ── 3D FLIP CONTAINER (Spacious Container: Image, Title & Description ON FRONT; Features ON BACK) ── */}
+      {/* ── UNIFIED SINGLE PRODUCT CARD SHELL ── */}
+      <div
+        className="relative flex flex-col justify-between h-[610px] sm:h-[630px] w-full rounded-3xl border border-white/10 bg-surface-raised group transition-all duration-500 hover:border-accent/40 hover:shadow-2xl shadow-xl overflow-hidden"
+        onMouseEnter={() => setIsFlipped(true)}
+        onMouseLeave={() => setIsFlipped(false)}
+        role="article"
+        aria-label={product.name}
+      >
+        {/* Glow accent */}
         <div
-          className="relative h-[540px] sm:h-[560px] w-full cursor-pointer select-none"
+          className="absolute -top-24 -right-24 w-48 h-48 rounded-full pointer-events-none transition-opacity duration-500 opacity-20 group-hover:opacity-40"
+          style={{ background: `radial-gradient(circle, rgba(${accentRgb}, 0.3) 0%, transparent 70%)` }}
+        />
+
+        {/* ── 3D FLIP TOP SECTION (Image, Title & Short Desc ON FRONT; Features ON BACK) ── */}
+        <div
+          className="relative w-full flex-1 min-h-0 cursor-pointer select-none"
           style={{ perspective: "1400px" }}
-          onMouseEnter={() => setIsFlipped(true)}
-          onMouseLeave={() => setIsFlipped(false)}
-          role="article"
-          aria-label={product.name}
         >
           {/* 3D Flip Outer Box */}
           <div
-            className="relative w-full h-full rounded-3xl transition-transform duration-[800ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
+            className="relative w-full h-full transition-transform duration-[800ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
             style={{
               transformStyle: "preserve-3d",
               transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
-              boxShadow: isFlipped
-                ? "0 2px 8px rgba(0, 0, 0, 0.45)"
-                : "0 2px 6px rgba(0, 0, 0, 0.25)",
             }}
           >
-            {/* ── FRONT FACE (Image + Product Name + Short Description ONLY) ────────────────── */}
+            {/* ── FRONT FACE ────────────────── */}
             <div
-              className={`absolute inset-0 rounded-3xl border bg-surface-raised overflow-hidden flex flex-col justify-between transition-all duration-300 ${
-                !isLive ? "border-border-dark/60 opacity-90" : "border-white/10 group-hover:border-accent/40"
-              }`}
+              className="absolute inset-0 bg-surface-raised flex flex-col justify-between overflow-hidden"
               style={{
                 backfaceVisibility: "hidden",
                 WebkitBackfaceVisibility: "hidden",
               }}
             >
-              {/* High Quality Expanded Image Preview Container (h-[275px] sm:h-[290px]) */}
-              <div className="relative w-full h-[275px] sm:h-[290px] overflow-hidden bg-surface-base shrink-0">
+              {/* Product Image - Larger Full Fit Top Card Area */}
+              <div className="relative w-full h-[260px] sm:h-[285px] rounded-t-3xl overflow-hidden bg-surface-base border-b border-white/10 shrink-0">
                 <Image
                   src={imgSrc}
                   alt={product.imageAlt || product.name}
                   fill
                   priority
+                  unoptimized
                   sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-                  className={`object-cover object-top sm:object-center transition-transform duration-700 ease-out ${
-                    isFlipped ? "scale-108" : "scale-100"
-                  } ${!isLive ? "grayscale opacity-75" : "opacity-95"}`}
-                  quality={90}
+                  className={`object-cover object-top transition-transform duration-700 ease-out group-hover:scale-105 ${
+                    !isLive ? "grayscale opacity-85" : "opacity-100"
+                  }`}
                 />
-
-                {/* Hover Flip Pill */}
-                <div className="absolute top-3.5 right-3.5 z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-base/85 backdrop-blur-md border border-white/15 text-[10px] font-extrabold uppercase tracking-wider text-accent shadow-sm">
-                  <RotateCw size={11} className="animate-spin text-accent" />
-                  <span>Hover to Flip</span>
-                </div>
               </div>
 
-              {/* Front Content Body (Starting with Glowing Premium Icon & Badges) */}
-              <div className="p-6 flex flex-col justify-between flex-1 relative z-10">
+              {/* Front Content Body */}
+              <div className="p-5 sm:p-6 pt-4 flex flex-col justify-between flex-1 min-h-0 relative z-10">
                 <div>
-                  {/* Starting Row: Premium Glowing Icon + Category Badges */}
-                  <div className="flex items-center justify-between gap-3 mb-3">
-                    <div
-                      className="w-10 h-10 rounded-2xl border flex items-center justify-center shrink-0 shadow-sm transition-all duration-500 group-hover:scale-110 group-hover:rotate-6"
-                      style={{
-                        backgroundColor: `rgba(${accentRgb}, 0.16)`,
-                        borderColor: `rgba(${accentRgb}, 0.4)`,
-                        color: accentColor,
-                      }}
-                    >
-                      <ProductIcon size={20} />
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-1.5 justify-end">
-                      <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border bg-accent/10 border-accent/35 text-accent shadow-sm">
-                        AWENUE PRODUCT
+                  {/* Category & Status */}
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full border border-accent/30 bg-accent/10 text-accent shadow-sm">
+                      {product.category || (isLive ? "Live Platform" : "Healthcare Platform")}
+                    </span>
+                    {isLive ? (
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Live
                       </span>
-                      <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border border-accent/30 bg-accent/10 text-accent shadow-sm">
-                        {product.category || (isLive ? "Live Platform" : "Healthcare Platform")}
+                    ) : (
+                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                        Soon
                       </span>
-                    </div>
+                    )}
                   </div>
 
                   {/* Product Title */}
@@ -358,32 +359,28 @@ function ProductCardItem({
                   </h3>
 
                   {/* Short Description */}
-                  <p className="text-xs sm:text-sm text-text-muted/90 font-normal leading-relaxed line-clamp-3">
+                  <p className="text-xs sm:text-sm text-text-muted/90 font-normal leading-relaxed line-clamp-2 sm:line-clamp-3">
                     {product.shortDescription}
                   </p>
                 </div>
 
                 {/* Bottom Prompt Bar */}
-                <div className="flex items-center justify-between text-[11px] font-bold text-white/50 pt-3 border-t border-white/10 mt-3">
-                  <span className="flex items-center gap-1.5 text-accent">
+                <div className="flex items-center justify-between text-[11px] font-bold text-white/50 pt-2.5 border-t border-white/10 mt-3">
+                  <span className="text-accent flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-                    <span>Hover card for {product.features.length} modules</span>
+                    Hover to view {product.features.length} features
                   </span>
-                  <ArrowUpRight size={14} className="text-accent group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </div>
               </div>
             </div>
 
-            {/* ── BACK FACE (Full Detailed Features List - Clean Solid Background & 2px Shadow) ── */}
+            {/* ── BACK FACE (Full Detailed Features List) ── */}
             <div
-              className="absolute inset-0 rounded-3xl overflow-hidden border p-6 flex flex-col justify-between"
+              className="absolute inset-0 bg-[#0A0F0D] p-5 sm:p-6 flex flex-col justify-between overflow-hidden"
               style={{
                 backfaceVisibility: "hidden",
                 WebkitBackfaceVisibility: "hidden",
                 transform: "rotateY(180deg)",
-                borderColor: `rgba(${accentRgb}, 0.35)`,
-                backgroundColor: "#0A0F0D",
-                boxShadow: "0 2px 8px rgba(0, 0, 0, 0.45)",
               }}
             >
               {/* Watermark Background Image */}
@@ -392,56 +389,44 @@ function ProductCardItem({
                 alt=""
                 fill
                 aria-hidden="true"
-                className="object-cover object-center opacity-[0.05] scale-110 pointer-events-none"
+                className="object-cover object-center opacity-[0.04] scale-110 pointer-events-none"
                 sizes="50vw"
                 quality={40}
               />
 
               {/* Back Header */}
-              <div className="relative z-10 mb-2 border-b border-white/10 pb-2.5 shrink-0">
+              <div className="relative z-10 mb-2 border-b border-white/10 pb-3 shrink-0">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className="w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 shadow-md"
-                      style={{
-                        backgroundColor: `rgba(${accentRgb}, 0.2)`,
-                        borderColor: `rgba(${accentRgb}, 0.4)`,
-                        color: accentColor,
-                      }}
-                    >
-                      <ProductIcon size={16} />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-black text-white leading-tight">{product.name}</h3>
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: accentColor }}>
-                        {product.category || (isLive ? "Live Platform" : "Healthcare Platform")}
-                      </span>
-                    </div>
+                  <div>
+                    <h3 className="text-lg font-black text-white leading-tight">{product.name}</h3>
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-accent">
+                      {product.category || (isLive ? "Live Platform" : "Healthcare Platform")}
+                    </span>
                   </div>
                   {isLive ? (
-                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                       LIVE
                     </span>
                   ) : (
-                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
                       SOON
                     </span>
                   )}
                 </div>
               </div>
 
-              {/* Full Features List (All 8 Features) */}
-              <div className="relative z-10 flex-1 overflow-y-auto pr-1 my-1 custom-scrollbar">
-                <p className="text-[10px] font-extrabold text-white/50 uppercase tracking-widest mb-2">
+              {/* Full Features List */}
+              <div className="relative z-10 flex-1 overflow-y-auto pr-1 my-2 custom-scrollbar">
+                <p className="text-[10px] font-extrabold text-white/50 uppercase tracking-widest mb-2.5">
                   Complete Features &amp; Modules:
                 </p>
-                <div className="grid grid-cols-1 gap-1.5">
+                <div className="grid grid-cols-1 gap-2">
                   {product.features.map((feat, i) => (
                     <div
                       key={i}
-                      className="flex items-start gap-2.5 p-2 rounded-xl border border-white/5 bg-white/[0.04] hover:bg-white/[0.08] transition-colors"
+                      className="flex items-center gap-2.5 p-2.5 rounded-xl border border-white/5 bg-white/[0.04] hover:bg-white/[0.08] transition-colors"
                     >
-                      <CheckCircle2 size={13} className="shrink-0 mt-0.5" style={{ color: accentColor }} aria-hidden="true" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
                       <span className="text-xs font-bold text-white/90 leading-snug">{feat}</span>
                     </div>
                   ))}
@@ -451,21 +436,34 @@ function ProductCardItem({
           </div>
         </div>
 
-        {/* ── FIXED NON-FLIPPING BUTTON BELOW CARD ───────────────── */}
-        <div className="w-full shrink-0">
-          <motion.button
-            onClick={onCTA}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="w-full flex items-center justify-center gap-2 py-3.5 px-5 rounded-2xl font-extrabold text-xs sm:text-sm text-surface-base transition-all duration-300 outline-none cursor-pointer shadow-lg hover:shadow-xl"
-            style={{
-              backgroundColor: accentColor,
-              boxShadow: `0 4px 20px rgba(${accentRgb}, 0.35)`,
-            }}
-          >
-            <span>{product.ctaLabel || (isLive ? "Visit Product Website" : "Discuss Requirements")}</span>
-            {isLive ? <ExternalLink size={15} aria-hidden="true" /> : <ArrowRight size={15} aria-hidden="true" />}
-          </motion.button>
+        {/* ── STATIC NON-FLIP BUTTONS FOOTER ── */}
+        <div className="p-4 sm:p-5 bg-surface-base/50 border-t border-white/10 w-full shrink-0 relative z-20">
+          <div className="flex items-center gap-2.5 w-full">
+            <motion.button
+              onClick={onCTA}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-extrabold text-xs sm:text-sm text-surface-base transition-all duration-300 outline-none cursor-pointer shadow-md hover:shadow-lg"
+              style={{
+                backgroundColor: accentColor,
+                boxShadow: `0 4px 16px rgba(${accentRgb}, 0.35)`,
+              }}
+            >
+              <span>{product.ctaLabel || (isLive ? "Visit Website" : "Discuss Requirements")}</span>
+            </motion.button>
+
+            {isLive && (
+              <motion.button
+                onClick={() => openModal("consultation", `Demo Request: ${product.name}`)}
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
+                title="Request Live Demo"
+                className="py-3 px-3.5 rounded-xl font-extrabold text-xs text-white bg-white/10 hover:bg-white/20 border border-white/15 transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+              >
+                <span>Book Demo</span>
+              </motion.button>
+            )}
+          </div>
         </div>
       </div>
     </RevealOnScroll>
