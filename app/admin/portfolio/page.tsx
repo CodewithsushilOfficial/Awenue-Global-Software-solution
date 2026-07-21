@@ -38,6 +38,12 @@ interface PortfolioProject {
   imageAlt?: string;
   displayOrder: number;
   published: boolean;
+  seoTitle?: string;
+  seoDescription?: string;
+  seoCanonical?: string;
+  seoOgImage?: string;
+  seoNoindex?: boolean;
+  schemaType?: string;
 }
 
 export default function AdminPortfolioPage() {
@@ -206,6 +212,12 @@ export default function AdminPortfolioPage() {
       imageAlt: editingProject.imageAlt || "",
       displayOrder: Number(editingProject.displayOrder) || 1,
       published: editingProject.published !== false,
+      seoTitle: editingProject.seoTitle || "",
+      seoDescription: editingProject.seoDescription || "",
+      seoCanonical: editingProject.seoCanonical || "",
+      seoOgImage: editingProject.seoOgImage || "",
+      seoNoindex: Boolean(editingProject.seoNoindex),
+      schemaType: editingProject.schemaType || "CreativeWork",
       updatedAt: new Date().toISOString(),
     };
 
@@ -559,6 +571,92 @@ export default function AdminPortfolioPage() {
                 label="Project Image URL"
                 placeholder="https://example.com/project-screenshot.jpg"
               />
+
+              {/* Expandable SEO Settings */}
+              <div className="border border-white/5 rounded-2xl p-4 bg-surface-base/30 space-y-4">
+                <h3 className="text-xs font-bold text-accent uppercase tracking-wider">
+                  SEO & Meta Configuration (Search Optimization)
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
+                      SEO Title Override
+                    </label>
+                    <input
+                      type="text"
+                      value={editingProject.seoTitle || ""}
+                      onChange={(e) => setEditingProject({ ...editingProject, seoTitle: e.target.value })}
+                      placeholder="e.g. Enterprise Data Analytics Case Study"
+                      className="w-full bg-surface-base border border-white/10 px-3.5 py-2.5 rounded-xl text-xs text-white outline-none focus:border-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
+                      Canonical URL Override
+                    </label>
+                    <input
+                      type="text"
+                      value={editingProject.seoCanonical || ""}
+                      onChange={(e) => setEditingProject({ ...editingProject, seoCanonical: e.target.value })}
+                      placeholder="https://example.com/custom-canonical"
+                      className="w-full bg-surface-base border border-white/10 px-3.5 py-2.5 rounded-xl text-xs text-white outline-none focus:border-accent"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
+                    Meta Description Override
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={editingProject.seoDescription || ""}
+                    onChange={(e) => setEditingProject({ ...editingProject, seoDescription: e.target.value })}
+                    placeholder="Custom meta description for search result snippets..."
+                    className="w-full bg-surface-base border border-white/10 p-3 rounded-xl text-xs text-white outline-none focus:border-accent resize-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
+                      Social Preview (OG) Image URL
+                    </label>
+                    <input
+                      type="text"
+                      value={editingProject.seoOgImage || ""}
+                      onChange={(e) => setEditingProject({ ...editingProject, seoOgImage: e.target.value })}
+                      placeholder="https://example.com/og-image.jpg"
+                      className="w-full bg-surface-base border border-white/10 px-3.5 py-2.5 rounded-xl text-xs text-white outline-none focus:border-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
+                      Schema Markup Type
+                    </label>
+                    <select
+                      value={editingProject.schemaType || "CreativeWork"}
+                      onChange={(e) => setEditingProject({ ...editingProject, schemaType: e.target.value })}
+                      className="w-full bg-surface-base border border-white/10 px-3.5 py-2.5 rounded-xl text-xs text-white outline-none focus:border-accent"
+                    >
+                      <option value="CreativeWork">CreativeWork Schema</option>
+                      <option value="WebPage">WebPage Schema</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <label className="text-xs font-bold text-white flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(editingProject.seoNoindex)}
+                      onChange={(e) => setEditingProject({ ...editingProject, seoNoindex: e.target.checked })}
+                      className="w-4 h-4 accent-accent rounded cursor-pointer"
+                    />
+                    Search Engine Noindex (Hide page from search results)
+                  </label>
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>

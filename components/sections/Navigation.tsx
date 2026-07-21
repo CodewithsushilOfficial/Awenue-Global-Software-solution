@@ -26,8 +26,8 @@ export default function Navigation() {
     { name: "Home", href: "/" },
     { name: "Services", href: "/#services" },
     { name: "Products", href: "/#products" },
-    { name: "About", href: "/#about" },
-    { name: "Contact", href: "/#contact" },
+    { name: "Portfolio", href: "/#portfolio" },
+    { name: "Contact", href: "/contact" },
   ];
 
 
@@ -44,7 +44,7 @@ export default function Navigation() {
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           {/* Logo */}
           <a
-            href="#"
+            href="/"
             className="text-lg sm:text-xl font-extrabold tracking-wider text-text-secondary outline-none focus-visible:outline-2 focus-visible:outline-accent-tint focus-visible:outline-offset-2"
           >
             AWEN<span className="text-accent">UE</span>

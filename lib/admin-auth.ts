@@ -12,7 +12,7 @@
  * 5. Returns authorized AdminRecord or denies access for unauthorized accounts
  */
 
-import { getAdminDb, getAdminAuth } from "@/lib/firebase-admin";
+import { getAdminDb, getAdminAuth, ensureServerSignedIn, adminDb, adminAuth } from "@/lib/firebase-admin";
 import { getSessionFromRequest } from "@/lib/session";
 import {
   hasPermission,
@@ -69,6 +69,7 @@ function getEnvAdmin(normalizedEmail: string): AdminRecord | null {
 export async function authorizeGoogleAdmin(
   idToken: string
 ): Promise<{ authorized: boolean; admin?: AdminRecord; error?: string }> {
+  await ensureServerSignedIn().catch(() => {});
   if (!idToken || typeof idToken !== "string") {
     return { authorized: false, error: "Firebase ID token is required." };
   }
@@ -79,7 +80,7 @@ export async function authorizeGoogleAdmin(
 
   // 1. Primary verification via Firebase Admin SDK
   try {
-    const auth = getAdminAuth();
+    const auth = adminAuth;
     if (auth) {
       const decodedToken = await auth.verifyIdToken(idToken);
       googleUid = decodedToken.uid;
@@ -144,7 +145,7 @@ export async function authorizeGoogleAdmin(
   }
 
   const normalizedEmail = googleEmail.trim().toLowerCase();
-  const db = getAdminDb();
+  const db = adminDb;
   const now = new Date().toISOString();
 
   if (db) {
@@ -305,11 +306,12 @@ export async function authorizeGoogleAdmin(
 export async function getAdminByEmail(
   email: string
 ): Promise<AdminRecord | null> {
+  await ensureServerSignedIn().catch(() => {});
   const normalizedEmail = email.trim().toLowerCase();
   if (!normalizedEmail) return null;
 
   try {
-    const db = getAdminDb();
+    const db = adminDb;
     if (db) {
       const snap = await db
         .collection("admins")
@@ -353,12 +355,13 @@ export async function getAdminByEmail(
 export async function getAdminById(
   adminId: string
 ): Promise<AdminRecord | null> {
+  await ensureServerSignedIn().catch(() => {});
   if (adminId === "env_bootstrap_admin" || adminId === "super_admin_permanent") {
     return getEnvAdmin(PERMANENT_ADMIN_EMAIL);
   }
 
   try {
-    const db = getAdminDb();
+    const db = adminDb;
     if (!db) return getEnvAdmin(PERMANENT_ADMIN_EMAIL);
 
     const doc = await db.collection("admins").doc(adminId).get();
@@ -397,6 +400,7 @@ export async function getAdminById(
 export async function getAdminFromRequest(request: {
   cookies: { get: (name: string) => { value: string } | undefined };
 }): Promise<AdminRecord | null> {
+  await ensureServerSignedIn().catch(() => {});
   const session = getSessionFromRequest(request);
   if (!session) return null;
 
@@ -425,7 +429,7 @@ export async function requirePermission(
 export async function updateLastLogin(adminId: string): Promise<void> {
   if (adminId === "env_bootstrap_admin") return;
   try {
-    const db = getAdminDb();
+    const db = adminDb;
     if (!db) return;
     await db.collection("admins").doc(adminId).update({
       lastLoginAt: new Date().toISOString(),
@@ -443,7 +447,7 @@ export async function logAdminActivity(params: {
   metadata?: Record<string, unknown>;
 }): Promise<void> {
   try {
-    const db = getAdminDb();
+    const db = adminDb;
     if (!db) return;
 
     await db.collection("adminAuditLogs").add({

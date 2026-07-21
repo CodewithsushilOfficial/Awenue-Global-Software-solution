@@ -28,9 +28,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     console.error("Error fetching metadata for product:", err);
   }
 
-  const title = productDoc ? `${productDoc.name} | AWENUE Products` : `${slug.replace("-", " ")} | AWENUE Products`;
-  const description = productDoc ? productDoc.shortDescription : "High-utility enterprise and digital software solutions built by AWENUE.";
-  const canonicalUrl = `https://www.awenueglobalsoftwaresolutions.in/products/${slug}`;
+  const title = productDoc?.seoTitle || (productDoc ? `${productDoc.name} | AWENUE Products` : `${slug.replace("-", " ")} | AWENUE Products`);
+  const description = productDoc?.seoDescription || (productDoc ? productDoc.shortDescription : "High-utility enterprise and digital software solutions built by AWENUE.");
+  const canonicalUrl = productDoc?.seoCanonical || `https://www.awenueglobalsoftwaresolutions.in/products/${slug}`;
+  const ogImage = productDoc?.seoOgImage || productDoc?.imageUrl || "/images/og-image.jpg";
+  const index = productDoc?.seoNoindex ? false : true;
 
   return {
     title,
@@ -44,11 +46,17 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       url: canonicalUrl,
       type: "website",
       siteName: "AWENUE Global Software Solutions",
+      images: ogImage ? [{ url: ogImage }] : undefined,
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
+      images: ogImage ? [ogImage] : undefined,
+    },
+    robots: {
+      index,
+      follow: index,
     }
   };
 }
@@ -103,9 +111,9 @@ export default async function ProductPage({ params }: PageProps) {
   // Schema Markup (JSON-LD)
   const productSchema = {
     "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": name,
-    "description": shortDescription,
+    "@type": dbProduct.schemaType || "SoftwareApplication",
+    "name": dbProduct.seoTitle || name,
+    "description": dbProduct.seoDescription || shortDescription,
     "applicationCategory": "BusinessApplication",
     "operatingSystem": "Web, Cloud",
     "provider": {
@@ -122,11 +130,40 @@ export default async function ProductPage({ params }: PageProps) {
     }
   };
 
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": "https://www.awenueglobalsoftwaresolutions.in"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Products",
+        "item": "https://www.awenueglobalsoftwaresolutions.in/#products"
+      },
+      {
+        "@type": "ListItem",
+        "position": 3,
+        "name": name,
+        "item": `https://www.awenueglobalsoftwaresolutions.in/products/${slug}`
+      }
+    ]
+  };
+
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
       />
 
       <Navigation />

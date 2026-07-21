@@ -1,12 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { adminAuth, adminDb, ensureServerSignedIn } from "@/lib/firebase-admin";
+import { getAdminFromRequest } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // 1. Fetch users from Firestore 'users' collection
+    // 1. Authorize Admin session
+    const admin = await getAdminFromRequest(request);
+    if (!admin || admin.status !== "active") {
+      return NextResponse.json(
+        { error: "Unauthorized. Valid active admin session is required." },
+        { status: 401 }
+      );
+    }
+
+    await ensureServerSignedIn().catch(() => {});
+
+    // 2. Fetch users from Firestore 'users' collection
     const usersSnap = await adminDb.collection("users").get();
     const usersMap = new Map<string, Record<string, unknown>>();
 
@@ -14,7 +26,7 @@ export async function GET() {
       usersMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() });
     });
 
-    // 2. Fetch users from Firebase Auth listUsers
+    // 3. Fetch users from Firebase Auth listUsers
     let authUsers: Record<string, unknown>[] = [];
     try {
       const listUsersResult = await adminAuth.listUsers(100);
@@ -60,6 +72,17 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    // 1. Authorize Admin session
+    const admin = await getAdminFromRequest(request);
+    if (!admin || admin.status !== "active") {
+      return NextResponse.json(
+        { error: "Unauthorized. Valid active admin session is required." },
+        { status: 401 }
+      );
+    }
+
+    await ensureServerSignedIn().catch(() => {});
+
     const body = await request.json();
     const { uid, disabled } = body;
 
@@ -67,14 +90,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User ID (uid) is required." }, { status: 400 });
     }
 
-    // 1. Update status in Firebase Auth via Admin SDK
+    // 2. Update status in Firebase Auth via Admin SDK / Shim
     try {
       await adminAuth.updateUser(uid, { disabled: Boolean(disabled) });
     } catch (authErr) {
       console.warn("Notice: Auth user state update:", authErr);
     }
 
-    // 2. Update status in Firestore 'users' collection
+    // 3. Update status in Firestore 'users' collection
     const userRef = adminDb.collection("users").doc(uid);
     const userSnap = await userRef.get();
     const newStatus = disabled ? "disabled" : "active";

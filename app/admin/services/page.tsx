@@ -39,6 +39,12 @@ interface ServiceItem {
   published: boolean;
   imageUrl?: string;
   imageAlt?: string;
+  seoTitle?: string;
+  seoDescription?: string;
+  seoCanonical?: string;
+  seoOgImage?: string;
+  seoNoindex?: boolean;
+  schemaType?: string;
 }
 
 export default function AdminServicesPage() {
@@ -244,6 +250,12 @@ export default function AdminServicesPage() {
       published: editingService.published !== false,
       imageUrl: editingService.imageUrl || null,
       imageAlt: editingService.imageAlt || "",
+      seoTitle: editingService.seoTitle || "",
+      seoDescription: editingService.seoDescription || "",
+      seoCanonical: editingService.seoCanonical || "",
+      seoOgImage: editingService.seoOgImage || "",
+      seoNoindex: Boolean(editingService.seoNoindex),
+      schemaType: editingService.schemaType || "Service",
       updatedAt: new Date().toISOString(),
     };
 
@@ -562,6 +574,93 @@ export default function AdminServicesPage() {
                 label="Service Image URL (Optional)"
                 placeholder="https://example.com/web-development.jpg"
               />
+
+              {/* Expandable SEO Settings */}
+              <div className="border border-white/5 rounded-2xl p-4 bg-surface-base/30 space-y-4">
+                <h3 className="text-xs font-bold text-accent uppercase tracking-wider">
+                  SEO & Meta Configuration (Search Optimization)
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
+                      SEO Title Override
+                    </label>
+                    <input
+                      type="text"
+                      value={editingService.seoTitle || ""}
+                      onChange={(e) => setEditingService({ ...editingService, seoTitle: e.target.value })}
+                      placeholder="e.g. Best Web Development Services in India"
+                      className="w-full bg-surface-base border border-white/10 px-3.5 py-2.5 rounded-xl text-xs text-white outline-none focus:border-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
+                      Canonical URL Override
+                    </label>
+                    <input
+                      type="text"
+                      value={editingService.seoCanonical || ""}
+                      onChange={(e) => setEditingService({ ...editingService, seoCanonical: e.target.value })}
+                      placeholder="https://example.com/custom-canonical"
+                      className="w-full bg-surface-base border border-white/10 px-3.5 py-2.5 rounded-xl text-xs text-white outline-none focus:border-accent"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
+                    Meta Description Override
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={editingService.seoDescription || ""}
+                    onChange={(e) => setEditingService({ ...editingService, seoDescription: e.target.value })}
+                    placeholder="Custom meta description for search result snippets..."
+                    className="w-full bg-surface-base border border-white/10 p-3 rounded-xl text-xs text-white outline-none focus:border-accent resize-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
+                      Social Preview (OG) Image URL
+                    </label>
+                    <input
+                      type="text"
+                      value={editingService.seoOgImage || ""}
+                      onChange={(e) => setEditingService({ ...editingService, seoOgImage: e.target.value })}
+                      placeholder="https://example.com/og-image.jpg"
+                      className="w-full bg-surface-base border border-white/10 px-3.5 py-2.5 rounded-xl text-xs text-white outline-none focus:border-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
+                      Schema Markup Type
+                    </label>
+                    <select
+                      value={editingService.schemaType || "Service"}
+                      onChange={(e) => setEditingService({ ...editingService, schemaType: e.target.value })}
+                      className="w-full bg-surface-base border border-white/10 px-3.5 py-2.5 rounded-xl text-xs text-white outline-none focus:border-accent"
+                    >
+                      <option value="Service">Service Schema</option>
+                      <option value="ProfessionalService">ProfessionalService Schema</option>
+                      <option value="LocalBusiness">LocalBusiness Schema</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <label className="text-xs font-bold text-white flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(editingService.seoNoindex)}
+                      onChange={(e) => setEditingService({ ...editingService, seoNoindex: e.target.checked })}
+                      className="w-4 h-4 accent-accent rounded cursor-pointer"
+                    />
+                    Search Engine Noindex (Hide page from search results)
+                  </label>
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>

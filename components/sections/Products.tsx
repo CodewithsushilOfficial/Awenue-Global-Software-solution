@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Image from "next/image";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { motion } from "motion/react";
 import RevealOnScroll from "@/components/motion/RevealOnScroll";
 import { useModal } from "@/components/providers/ModalProvider";
-import { ArrowRight, ArrowUpRight, CheckCircle2, ExternalLink } from "lucide-react";
+import { ArrowRight, ArrowUpRight, CheckCircle2, LayoutDashboard, GraduationCap, HeartPulse, Box } from "lucide-react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+
+gsap.registerPlugin(ScrollTrigger);
 
 export interface ProductItem {
   id: string;
@@ -21,7 +25,6 @@ export interface ProductItem {
   ctaLabel?: string;
   displayOrder: number;
   published: boolean;
-  // CMS image fields (imageUrl is canonical; image is legacy fallback)
   imageUrl?: string;
   image?: string;
   imageAlt?: string;
@@ -37,30 +40,32 @@ const DEFAULT_PRODUCTS: ProductItem[] = [
     slug: "awenue-crm",
     category: "SaaS Product",
     shortDescription: "Manage leads, customers, sales, and business relationships — all in one place.",
-    features: ["Lead Management", "Sales Pipeline", "Customer Management"],
+    features: ["Lead Management", "Sales Pipeline", "Customer Management", "Deal Tracking", "Analytics & Reports"],
     productStatus: "live",
     externalUrl: "https://crm.awenue.io",
     ctaLabel: "Visit CRM Website",
     displayOrder: 1,
     published: true,
-    image: "/images/services/saas.jpg",
+    imageUrl: "/images/products/crm-hq.png",
+    image: "/images/products/crm-hq.png",
     imageAlt: "Awenue CRM Dashboard Preview",
-    accentColor: "#3B82F6",
-    accentRgb: "59,130,246",
+    accentColor: "#09B850",
+    accentRgb: "9,184,80",
   },
   {
     id: "erp",
     name: "Awenue College ERP",
     slug: "awenue-college-erp",
-    category: "Business Platform",
+    category: "Education Platform",
     shortDescription: "A smarter platform to manage students, faculty, academics, fees, and campus operations.",
-    features: ["Student Management", "Attendance", "Fee Management"],
+    features: ["Student Management", "Attendance", "Fee Collection", "Exam Results", "Timetable Scheduling"],
     productStatus: "live",
     externalUrl: "https://erp.awenue.io",
     ctaLabel: "Visit ERP Website",
     displayOrder: 2,
     published: true,
-    image: "/images/web_design.webp",
+    imageUrl: "/images/products/erp-hq.png",
+    image: "/images/products/erp-hq.png",
     imageAlt: "Awenue College ERP Platform Preview",
     accentColor: "#06B6D4",
     accentRgb: "6,182,212",
@@ -71,18 +76,27 @@ const DEFAULT_PRODUCTS: ProductItem[] = [
     slug: "hospital-management",
     category: "Healthcare Platform",
     shortDescription: "A connected digital solution designed to simplify hospital and healthcare operations.",
-    features: ["Patient Management", "Appointments", "Hospital Operations"],
+    features: ["Patient Records (OPD/IPD)", "Appointment Scheduling", "Doctor Management", "Pharmacy", "Billing & Insurance"],
     productStatus: "coming_soon",
     externalUrl: "",
     ctaLabel: "Coming Soon",
     displayOrder: 3,
     published: true,
-    image: "/images/services/ai.jpg",
-    imageAlt: "Awenue Hospital Management — Coming Soon",
+    imageUrl: "/images/products/hospital-hq.png",
+    image: "/images/products/hospital-hq.png",
+    imageAlt: "Awenue Hospital Management System — Coming Soon",
     accentColor: "#9333EA",
     accentRgb: "147,51,234",
   },
 ];
+
+const getProductIcon = (slug: string) => {
+  const s = slug.toLowerCase();
+  if (s.includes("crm")) return LayoutDashboard;
+  if (s.includes("erp") || s.includes("college") || s.includes("school")) return GraduationCap;
+  if (s.includes("hospital") || s.includes("healthcare") || s.includes("clinic")) return HeartPulse;
+  return Box;
+};
 
 export default function Products({ initialProducts }: { initialProducts?: ProductItem[] }) {
   const { openModal } = useModal();
@@ -131,38 +145,32 @@ export default function Products({ initialProducts }: { initialProducts?: Produc
       />
 
       <div className="max-w-7xl mx-auto px-6 relative z-10">
-        {/* Header — Center Aligned */}
-        <div className="text-center max-w-3xl mx-auto mb-16">
-          <RevealOnScroll delay={0.1}>
-            <span className="text-accent text-eyebrow block mb-3">OUR PRODUCTS</span>
-          </RevealOnScroll>
-          <RevealOnScroll delay={0.15}>
-            <h2 className="text-section-title mb-4 leading-tight">
-              Software Built for <span className="text-accent">Real Business.</span>
-            </h2>
-          </RevealOnScroll>
-          <RevealOnScroll delay={0.2}>
-            <p className="text-text-muted text-body-lg max-w-xl mx-auto mb-6 leading-relaxed">
-              Practical digital products we&apos;ve designed and built to simplify operations and help organizations grow smarter.
-            </p>
-          </RevealOnScroll>
-          <RevealOnScroll delay={0.25}>
-            <motion.button
-              onClick={() => openModal("consultation", "I Have a Business Idea")}
-              whileHover={{ scale: 1.04, boxShadow: "0 0 30px rgba(9,184,80,0.3)" }}
-              whileTap={{ scale: 0.97 }}
-              className="inline-flex items-center gap-2 text-btn text-accent border border-accent/40 bg-accent/10 hover:bg-accent/20 px-7 py-3 rounded-xl transition-all cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-accent-tint shadow-lg"
-            >
-              <span>Discuss Product Requirements</span>
-              <ArrowRight size={16} aria-hidden="true" />
-            </motion.button>
-          </RevealOnScroll>
-        </div>
+        {/* Header */}
+        <SectionHeader />
+
+        {/* Marquee Strip */}
+        <MarqueeStrip products={products} />
+
+        {/* Hover hint */}
+        <p className="text-center text-[11px] font-semibold text-text-muted/40 uppercase tracking-widest mb-10">
+          Hover on any card to explore
+        </p>
 
         {/* Product Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 xl:gap-6">
           {products.map((product, idx) => (
-            <ProductCard key={product.id} product={product} delay={0.1 + idx * 0.1} />
+            <ProductCard
+              key={product.id}
+              product={product}
+              index={idx}
+              onCTA={() => {
+                if (product.productStatus === "live" && product.externalUrl) {
+                  window.open(product.externalUrl, "_blank", "noopener,noreferrer");
+                } else {
+                  openModal("consultation", product.name);
+                }
+              }}
+            />
           ))}
         </div>
 
@@ -184,175 +192,327 @@ export default function Products({ initialProducts }: { initialProducts?: Produc
   );
 }
 
+// ─── SECTION HEADER ───────────────────────────────────────────────────────────
+function SectionHeader() {
+  const { openModal } = useModal();
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const kids = el.querySelectorAll(".h-anim");
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        kids,
+        { opacity: 0, y: 30 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.7,
+          ease: "power3.out",
+          stagger: 0.13,
+          scrollTrigger: { trigger: el, start: "top 85%", toggleActions: "play none none none" },
+        }
+      );
+    }, el);
+    return () => ctx.revert();
+  }, []);
+
+  return (
+    <div ref={ref} className="text-center mb-6">
+      <span className="h-anim opacity-0 block text-accent text-eyebrow mb-4">OUR PRODUCTS</span>
+      <h2 className="h-anim opacity-0 text-section-title text-text-secondary mb-5 leading-tight">
+        Software Built for <span className="text-accent">Real Business.</span>
+      </h2>
+      <p className="h-anim opacity-0 text-body-lg text-text-muted max-w-xl mx-auto mb-8 leading-relaxed">
+        Practical digital products we&apos;ve designed and built to simplify operations and help organizations grow smarter.
+      </p>
+      <div className="h-anim opacity-0 mb-8">
+        <motion.button
+          onClick={() => openModal("consultation", "I Have a Business Idea")}
+          whileHover={{ scale: 1.04, boxShadow: "0 0 30px rgba(9,184,80,0.3)" }}
+          whileTap={{ scale: 0.97 }}
+          className="inline-flex items-center gap-2 text-btn text-accent border border-accent/40 bg-accent/10 hover:bg-accent/20 px-7 py-3 rounded-xl transition-all cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-accent-tint shadow-lg"
+        >
+          <span>Discuss Product Requirements</span>
+          <ArrowRight size={16} aria-hidden="true" />
+        </motion.button>
+      </div>
+    </div>
+  );
+}
+
+// ─── MARQUEE ──────────────────────────────────────────────────────────────────
+function MarqueeStrip({ products }: { products: ProductItem[] }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const ctx = gsap.context(() => {
+      gsap.to(track, { xPercent: -50, duration: 25, ease: "none", repeat: -1 });
+    }, track);
+    return () => ctx.revert();
+  }, []);
+
+  const titles = products.map((p) => p.name);
+  const items = [...titles, ...titles, ...titles];
+  return (
+    <div className="relative overflow-hidden py-4 border-y border-border-dark/50 mb-16 select-none" aria-hidden="true">
+      <div ref={trackRef} className="flex gap-14 w-max whitespace-nowrap">
+        {items.map((item, i) => (
+          <span key={i} className="flex items-center gap-4 text-text-muted/40 text-[10px] font-black uppercase tracking-[0.2em]">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent/50 shrink-0" />
+            {item}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── PRODUCT CARD COMPONENT ───────────────────────────────────────────────────
 function ProductCard({
   product,
-  delay,
+  index,
+  onCTA,
 }: {
   product: ProductItem;
-  delay: number;
+  index: number;
+  onCTA: () => void;
 }) {
-  const [hovered, setHovered] = useState(false);
-  const isLive = product.productStatus === "live";
+  const Icon = getProductIcon(product.slug || product.id);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
-  const handleProductClick = () => {
-    if (isLive && product.externalUrl) {
-      window.open(product.externalUrl, "_blank", "noopener,noreferrer");
-    }
-  };
+  // Entrance animation
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        el,
+        { opacity: 0, y: 50, scale: 0.93 },
+        {
+          opacity: 1,
+          y: 0,
+          scale: 1,
+          duration: 1.0,
+          ease: "power3.out",
+          delay: index * 0.20,
+          scrollTrigger: {
+            trigger: el,
+            start: "top 88%",
+            toggleActions: "play none none none",
+          },
+        }
+      );
+    }, el);
+    return () => ctx.revert();
+  }, [index]);
+
+  const accentColor = product.accentColor || "#09B850";
+  const accentRgb = product.accentRgb || "9,184,80";
+  const isLive = product.productStatus === "live";
+  const src = product.imageUrl || product.image || "/images/services/saas.jpg";
+  const alt = product.imageAlt || product.name;
 
   return (
-    <RevealOnScroll delay={delay}>
-      <motion.div
-        whileHover={{ y: isLive ? -6 : 0 }}
-        transition={{ type: "spring", stiffness: 220, damping: 20 }}
-        className={`group flex flex-col rounded-3xl border bg-surface-raised overflow-hidden h-full transition-all duration-400 ${
-          !isLive
-            ? "border-border-dark/60 opacity-85"
-            : "border-white/10 hover:border-accent/40 shadow-xl cursor-pointer"
-        }`}
+    <div
+      ref={wrapRef}
+      className="opacity-0 group relative h-[460px] cursor-pointer"
+      style={{ perspective: "1400px" }}
+      role="article"
+      aria-label={product.name}
+    >
+      {/* Inner flip container */}
+      <div
+        className="relative w-full h-full transition-transform duration-[950ms] ease-[cubic-bezier(0.45,0,0.15,1)]"
         style={{
-          boxShadow: hovered && isLive
-            ? `0 20px 50px rgba(${product.accentRgb || "9,184,80"}, 0.15), 0 0 0 1px rgba(${product.accentRgb || "9,184,80"}, 0.3)`
-            : "0 8px 30px rgba(0,0,0,0.4)",
+          transformStyle: "preserve-3d",
+          transform: "rotateY(0deg)",
         }}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        onClick={handleProductClick}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLDivElement).style.transform = "rotateY(180deg)";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLDivElement).style.transform = "rotateY(0deg)";
+        }}
       >
-        {/* Image Preview Container */}
-        <div className="relative w-full h-[220px] sm:h-[230px] overflow-hidden bg-surface-base shrink-0">
-          {/* Use standard img for CMS external imageUrl; fallback to next/image for local static assets */}
-          {(() => {
-            const src = product.imageUrl || product.image || "";
-            const alt = product.imageAlt || product.name;
-            if (src && (src.startsWith("http://") || src.startsWith("https://"))) {
-              return (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={src}
-                  alt={alt}
-                  loading="lazy"
-                  decoding="async"
-                  className={`w-full h-full object-cover object-center transition-transform duration-700 ease-out ${
-                    hovered && isLive ? "scale-108" : "scale-100"
-                  } ${!isLive ? "grayscale opacity-60" : "opacity-95"}`}
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.src = "/images/services/saas.jpg";
-                  }}
-                />
-              );
-            }
-            return (
-              <Image
-                src={src || "/images/services/saas.jpg"}
-                alt={alt}
-                fill
-                sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-                className={`object-cover object-center transition-transform duration-700 ease-out ${
-                  hovered && isLive ? "scale-108" : "scale-100"
-                } ${!isLive ? "grayscale opacity-60" : "opacity-95"}`}
-                quality={90}
-              />
-            );
-          })()}
+        {/* ── FRONT FACE ───────────────────────────────────────────────── */}
+        <div
+          className="absolute inset-0 rounded-2xl overflow-hidden border border-white/10"
+          style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}
+        >
+          {/* Background image */}
+          {src.startsWith("http://") || src.startsWith("https://") ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={src}
+              alt={alt}
+              className="w-full h-full object-cover object-center scale-105 group-hover:scale-110 transition-transform duration-700"
+              loading="lazy"
+              decoding="async"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.src = "/images/services/saas.jpg";
+              }}
+            />
+          ) : (
+            <Image
+              src={src}
+              alt={alt}
+              fill
+              className="object-cover object-center scale-105 group-hover:scale-110 transition-transform duration-700"
+              sizes="(max-width:768px) 100vw, 50vw"
+              quality={80}
+            />
+          )}
 
-          {/* Bottom Vignette Gradient */}
+          {/* Gradient overlay — bottom-heavy so content is readable */}
           <div
-            className="absolute inset-0 transition-opacity duration-300 pointer-events-none"
+            className="absolute inset-0"
             style={{
-              background: `linear-gradient(180deg, transparent 60%, rgba(10,15,13,0.5) 100%)`,
+              background: `linear-gradient(180deg, rgba(10,15,13,0.25) 0%, rgba(10,15,13,0.55) 45%, rgba(10,15,13,0.95) 100%)`,
             }}
+          />
+          {/* Colored glow at bottom matching product */}
+          <div
+            className="absolute inset-x-0 bottom-0 h-48 pointer-events-none"
+            style={{
+              background: `linear-gradient(to top, rgba(${accentRgb},0.18) 0%, transparent 100%)`,
+            }}
+          />
+
+          {/* Number badge */}
+          <div className="absolute top-5 left-5">
+            <span className="text-[10px] font-black tracking-[0.2em] text-white/40">
+              {String(product.displayOrder || index + 1).padStart(2, "0")}
+            </span>
+          </div>
+
+          {/* "Hover to explore" hint */}
+          <div className="absolute top-5 right-5 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            <span className="text-[9px] font-bold tracking-widest uppercase text-white/50 bg-white/10 backdrop-blur-sm border border-white/10 px-2.5 py-1 rounded-full">
+              Explore
+            </span>
+          </div>
+
+          {/* Content — bottom */}
+          <div className="absolute inset-x-0 bottom-0 p-6">
+            {/* Icon + Title */}
+            <div className="flex items-center gap-3 mb-3">
+              <div
+                className="shrink-0 w-10 h-10 rounded-xl border flex items-center justify-center transition-colors duration-300"
+                style={{
+                  backgroundColor: `rgba(${accentRgb}, 0.15)`,
+                  borderColor: `rgba(${accentRgb}, 0.35)`,
+                  color: accentColor,
+                }}
+              >
+                <Icon size={18} />
+              </div>
+              <h3 className="text-xl font-bold text-white leading-tight">{product.name}</h3>
+            </div>
+            {/* Desc */}
+            <p className="text-sm text-white/65 leading-relaxed line-clamp-2">{product.shortDescription}</p>
+
+            {/* Color line */}
+            <div
+              className="mt-4 h-0.5 w-12 rounded-full opacity-60"
+              style={{ backgroundColor: accentColor }}
+            />
+          </div>
+        </div>
+
+        {/* ── BACK FACE ────────────────────────────────────────────────── */}
+        <div
+          className="absolute inset-0 rounded-2xl overflow-hidden border"
+          style={{
+            backfaceVisibility: "hidden",
+            WebkitBackfaceVisibility: "hidden",
+            transform: "rotateY(180deg)",
+            borderColor: `rgba(${accentRgb},0.35)`,
+            background: "rgba(10,15,13,0.97)",
+            boxShadow: `0 0 60px rgba(${accentRgb},0.12), inset 0 0 80px rgba(${accentRgb},0.05)`,
+          }}
+        >
+          {/* Faint bg image */}
+          {src.startsWith("http://") || src.startsWith("https://") ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={src}
+              alt=""
+              aria-hidden="true"
+              className="object-cover object-center opacity-[0.07] scale-110 absolute inset-0 w-full h-full"
+              loading="lazy"
+            />
+          ) : (
+            <Image
+              src={src}
+              alt=""
+              fill
+              aria-hidden="true"
+              className="object-cover object-center opacity-[0.07] scale-110"
+              sizes="50vw"
+              quality={40}
+            />
+          )}
+
+          {/* Glow top */}
+          <div
+            className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-32 rounded-full pointer-events-none"
+            style={{ background: `radial-gradient(ellipse, rgba(${accentRgb},0.25) 0%, transparent 70%)` }}
             aria-hidden="true"
           />
 
-          {/* Hover Action Icon for Live Products */}
-          {isLive && (
-            <div
-              className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${
-                hovered ? "opacity-100" : "opacity-0"
-              }`}
-              aria-hidden="true"
-            >
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center shadow-glow transition-transform duration-300 scale-90 group-hover:scale-100"
-                style={{ backgroundColor: product.accentColor || "#09B850" }}
-              >
-                <ArrowUpRight size={22} className="text-surface-base" />
-              </div>
-            </div>
-          )}
-
-          {/* Coming Soon Badge */}
-          {!isLive && (
-            <div className="absolute top-3 right-3 z-10">
-              <span className="text-[10px] font-extrabold text-amber-400 border border-amber-400/40 bg-surface-base/90 backdrop-blur-md px-3 py-1 rounded-full shadow-lg uppercase tracking-wider">
-                Coming Soon
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Content Body */}
-        <div className="p-6 sm:p-7 flex flex-col gap-5 flex-1 justify-between relative z-10">
-          <div>
-            {/* Badges Row */}
-            <div className="flex flex-wrap items-center gap-2 mb-3">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full border bg-accent/15 border-accent/35 text-accent">
-                AWENUE PRODUCT
-              </span>
-              <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${
-                isLive ? "bg-blue-500/15 border-blue-400/30 text-blue-400" : "bg-purple-500/15 border-purple-400/30 text-purple-400"
-              }`}>
-                {product.category || (isLive ? "Live Platform" : "Healthcare Platform")}
-              </span>
-            </div>
-
-            {/* Name */}
-            <h3 className="text-xl sm:text-2xl font-black text-text-secondary mb-2 group-hover:text-white transition-colors">
-              {product.name}
-            </h3>
-
-            {/* Description */}
-            <p className="text-xs sm:text-sm text-text-muted font-normal leading-relaxed mb-4">
-              {product.shortDescription}
-            </p>
-
-            {/* Features List */}
-            <div className="flex flex-col gap-2 mb-4 pt-3 border-t border-white/10">
-              {product.features.map((f, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <CheckCircle2 size={13} className="shrink-0 text-accent" />
-                  <span className="text-xs font-semibold text-white/80">{f}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            {/* Action Row */}
-            <div className="flex items-center justify-between pt-4 border-t border-white/10">
-              {isLive ? (
-                <a
-                  href={product.externalUrl || "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="inline-flex items-center gap-2 text-sm font-extrabold text-accent hover:text-accent-tint transition-colors"
+          <div className="relative z-10 flex flex-col h-full p-6">
+            {/* Header */}
+            <div className="mb-5">
+              <div className="flex items-center gap-2.5 mb-2">
+                <div
+                  className="w-8 h-8 rounded-lg border flex items-center justify-center shrink-0"
+                  style={{
+                    backgroundColor: `rgba(${accentRgb}, 0.15)`,
+                    borderColor: `rgba(${accentRgb}, 0.35)`,
+                    color: accentColor,
+                  }}
                 >
-                  <span>{product.ctaLabel || "Visit Product Website"}</span>
-                  <ExternalLink size={15} />
-                </a>
-              ) : (
-                <span className="text-sm font-extrabold text-text-muted/50 cursor-default">
-                  Coming Soon
-                </span>
-              )}
+                  <Icon size={15} />
+                </div>
+                <h3 className="text-base font-bold text-white">{product.name}</h3>
+              </div>
+              <p className="text-[12px] font-bold" style={{ color: accentColor }}>
+                {product.category || (isLive ? "Live Platform" : "Coming Soon")}
+              </p>
             </div>
+
+            {/* Features */}
+            <ul className="flex-1 grid grid-cols-1 gap-y-2.5 overflow-hidden">
+              {product.features.map((feat, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <CheckCircle2 size={13} className="shrink-0 mt-0.5" style={{ color: accentColor }} aria-hidden="true" />
+                  <span className="text-[12px] text-white/70 font-medium leading-snug">{feat}</span>
+                </li>
+              ))}
+            </ul>
+
+            {/* CTA */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onCTA();
+              }}
+              className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm text-surface-base transition-all duration-200 active:scale-[0.98] outline-none focus-visible:outline-2 cursor-pointer"
+              style={{
+                backgroundColor: accentColor,
+                boxShadow: `0 0 24px rgba(${accentRgb},0.4)`,
+              }}
+            >
+              <span>{product.ctaLabel || (isLive ? "Visit Website" : "Coming Soon")}</span>
+              <ArrowRight size={15} aria-hidden="true" />
+            </button>
           </div>
         </div>
-      </motion.div>
-    </RevealOnScroll>
+      </div>
+    </div>
   );
 }

@@ -273,11 +273,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     console.error("Error fetching metadata for service:", err);
   }
 
-  // Fallback title/desc if firestore document is missing
-  const title = serviceDoc ? `${serviceDoc.title} Services | AWENUE` : `${slug.replace("-", " ")} Services | AWENUE`;
-  const description = serviceDoc ? serviceDoc.shortDescription : "Professional digital services provided by AWENUE Global Software Solutions.";
-
-  const canonicalUrl = `https://www.awenueglobalsoftwaresolutions.in/services/${slug}`;
+  // Check for custom CMS SEO overrides
+  const title = serviceDoc?.seoTitle || (serviceDoc ? `${serviceDoc.title} Services | AWENUE` : `${slug.replace("-", " ")} Services | AWENUE`);
+  const description = serviceDoc?.seoDescription || (serviceDoc ? serviceDoc.shortDescription : "Professional digital services provided by AWENUE Global Software Solutions.");
+  const canonicalUrl = serviceDoc?.seoCanonical || `https://www.awenueglobalsoftwaresolutions.in/services/${slug}`;
+  const ogImage = serviceDoc?.seoOgImage || serviceDoc?.imageUrl || "/images/og-image.jpg";
+  const index = serviceDoc?.seoNoindex ? false : true;
 
   return {
     title,
@@ -291,11 +292,17 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       url: canonicalUrl,
       type: "website",
       siteName: "AWENUE Global Software Solutions",
+      images: ogImage ? [{ url: ogImage }] : undefined,
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
+      images: ogImage ? [ogImage] : undefined,
+    },
+    robots: {
+      index,
+      follow: index,
     }
   };
 }
@@ -380,9 +387,9 @@ export default async function ServicePage({ params }: PageProps) {
   // Structured Data (JSON-LD Schema)
   const serviceSchema = {
     "@context": "https://schema.org",
-    "@type": "Service",
-    "name": title,
-    "description": shortDescription,
+    "@type": dbService?.schemaType || "Service",
+    "name": dbService?.seoTitle || title,
+    "description": dbService?.seoDescription || shortDescription,
     "provider": {
       "@type": "Organization",
       "name": "AWENUE Global Software Solutions",
@@ -415,6 +422,31 @@ export default async function ServicePage({ params }: PageProps) {
     }))
   };
 
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": "https://www.awenueglobalsoftwaresolutions.in"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Services",
+        "item": "https://www.awenueglobalsoftwaresolutions.in/#services"
+      },
+      {
+        "@type": "ListItem",
+        "position": 3,
+        "name": title,
+        "item": `https://www.awenueglobalsoftwaresolutions.in/services/${slug}`
+      }
+    ]
+  };
+
   return (
     <>
       {/* Schema Injection */}
@@ -425,6 +457,10 @@ export default async function ServicePage({ params }: PageProps) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
       />
 
       <Navigation />

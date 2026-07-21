@@ -28,9 +28,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     console.error("Error fetching metadata for portfolio:", err);
   }
 
-  const title = projectDoc ? `${projectDoc.name} | AWENUE Case Study` : `${slug.replace("-", " ")} | Case Study`;
-  const description = projectDoc ? projectDoc.shortDescription : "Case study detailing digital solutions built by AWENUE Global Software Solutions.";
-  const canonicalUrl = `https://www.awenueglobalsoftwaresolutions.in/portfolio/${slug}`;
+  const title = projectDoc?.seoTitle || (projectDoc ? `${projectDoc.name} | AWENUE Case Study` : `${slug.replace("-", " ")} | Case Study`);
+  const description = projectDoc?.seoDescription || (projectDoc ? projectDoc.shortDescription : "Case study detailing digital solutions built by AWENUE Global Software Solutions.");
+  const canonicalUrl = projectDoc?.seoCanonical || `https://www.awenueglobalsoftwaresolutions.in/portfolio/${slug}`;
+  const ogImage = projectDoc?.seoOgImage || projectDoc?.imageUrl || "/images/og-image.jpg";
+  const index = projectDoc?.seoNoindex ? false : true;
 
   return {
     title,
@@ -44,11 +46,17 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       url: canonicalUrl,
       type: "website",
       siteName: "AWENUE Global Software Solutions",
+      images: ogImage ? [{ url: ogImage }] : undefined,
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
+      images: ogImage ? [ogImage] : undefined,
+    },
+    robots: {
+      index,
+      follow: index,
     }
   };
 }
@@ -102,10 +110,10 @@ export default async function PortfolioProjectPage({ params }: PageProps) {
   // Schema Markup (JSON-LD)
   const caseStudySchema = {
     "@context": "https://schema.org",
-    "@type": "CreativeWork",
-    "name": name,
-    "headline": name,
-    "description": shortDescription,
+    "@type": dbProject.schemaType || "CreativeWork",
+    "name": dbProject.seoTitle || name,
+    "headline": dbProject.seoTitle || name,
+    "description": dbProject.seoDescription || shortDescription,
     "genre": category,
     "author": {
       "@type": "Organization",
@@ -118,11 +126,40 @@ export default async function PortfolioProjectPage({ params }: PageProps) {
     }
   };
 
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": "https://www.awenueglobalsoftwaresolutions.in"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Portfolio",
+        "item": "https://www.awenueglobalsoftwaresolutions.in/#portfolio"
+      },
+      {
+        "@type": "ListItem",
+        "position": 3,
+        "name": name,
+        "item": `https://www.awenueglobalsoftwaresolutions.in/portfolio/${slug}`
+      }
+    ]
+  };
+
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(caseStudySchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
       />
 
       <Navigation />

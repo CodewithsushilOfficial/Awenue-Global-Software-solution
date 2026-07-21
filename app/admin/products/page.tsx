@@ -40,6 +40,12 @@ interface ProductItem {
   published: boolean;
   imageUrl?: string;
   imageAlt?: string;
+  seoTitle?: string;
+  seoDescription?: string;
+  seoCanonical?: string;
+  seoOgImage?: string;
+  seoNoindex?: boolean;
+  schemaType?: string;
 }
 
 export default function AdminProductsPage() {
@@ -61,54 +67,23 @@ export default function AdminProductsPage() {
       });
 
       if (list.length === 0) {
-        // Auto-seed default products to Firestore so admin can manage them immediately
-        const initialProducts: Omit<ProductItem, "id">[] = [
-          {
-            name: "Awenue CRM",
-            slug: "awenue-crm",
-            shortDescription: "Manage leads, customers, sales, and business relationships — all in one place.",
-            detailedDescription: "Comprehensive CRM designed to organize leads, automate follow-ups, and track business growth effortlessly.",
-            features: ["Lead Management", "Sales Pipeline", "Customer Management"],
-            productStatus: "live",
-            externalUrl: "https://crm.awenue.io",
-            ctaLabel: "Visit CRM Website",
-            displayOrder: 1,
-            published: true,
-          },
-          {
-            name: "Awenue College ERP",
-            slug: "awenue-college-erp",
-            shortDescription: "A smarter platform to manage students, faculty, academics, fees, and campus operations.",
-            detailedDescription: "Complete institutional management software for modern colleges and universities.",
-            features: ["Student Management", "Attendance", "Fee Management"],
-            productStatus: "live",
-            externalUrl: "https://erp.awenue.io",
-            ctaLabel: "Visit ERP Website",
-            displayOrder: 2,
-            published: true,
-          },
-          {
-            name: "Awenue Hospital Management",
-            slug: "hospital-management",
-            shortDescription: "A connected digital solution designed to simplify hospital and healthcare operations.",
-            detailedDescription: "Next-generation healthcare administrative software for hospitals and medical clinics.",
-            features: ["Patient Management", "Appointments", "Hospital Operations"],
-            productStatus: "coming_soon",
-            externalUrl: "",
-            ctaLabel: "Coming Soon",
-            displayOrder: 3,
-            published: true,
-          },
-        ];
-
-        for (const item of initialProducts) {
-          const docId = `prod-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-          await fetch("/api/admin/cms", {
+        // Auto-seed via the dedicated seed-products API
+        try {
+          const seedRes = await fetch("/api/admin/seed-products", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "set", collectionName: "products", docId, data: item }),
+            body: JSON.stringify({ force: false }),
           });
-          list.push({ ...item, id: docId });
+          if (seedRes.ok) {
+            // Re-fetch after seeding
+            const q2 = query(collection(db, "products"), orderBy("displayOrder", "asc"));
+            const snap2 = await getDocs(q2);
+            snap2.forEach((docSnap) => {
+              list.push({ ...docSnap.data(), id: docSnap.id } as ProductItem);
+            });
+          }
+        } catch (seedErr) {
+          console.warn("Auto-seed products failed:", seedErr);
         }
       }
 
@@ -207,6 +182,12 @@ export default function AdminProductsPage() {
       published: editingProduct.published !== false,
       imageUrl: editingProduct.imageUrl || null,
       imageAlt: editingProduct.imageAlt || "",
+      seoTitle: editingProduct.seoTitle || "",
+      seoDescription: editingProduct.seoDescription || "",
+      seoCanonical: editingProduct.seoCanonical || "",
+      seoOgImage: editingProduct.seoOgImage || "",
+      seoNoindex: Boolean(editingProduct.seoNoindex),
+      schemaType: editingProduct.schemaType || "SoftwareApplication",
       updatedAt: new Date().toISOString(),
     };
 
@@ -319,6 +300,8 @@ export default function AdminProductsPage() {
     }
   };
 
+
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -332,13 +315,15 @@ export default function AdminProductsPage() {
           </p>
         </div>
 
-        <button
-          onClick={openNewProduct}
-          className="inline-flex items-center gap-2 bg-accent text-surface-base text-xs font-extrabold px-5 py-2.5 rounded-xl hover:bg-accent-hover transition-colors shadow-glow cursor-pointer self-start sm:self-auto"
-        >
-          <Plus size={16} />
-          <span>Add New Product</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
+          <button
+            onClick={openNewProduct}
+            className="inline-flex items-center gap-2 bg-accent text-surface-base text-xs font-extrabold px-5 py-2.5 rounded-xl hover:bg-accent-hover transition-colors shadow-glow cursor-pointer"
+          >
+            <Plus size={16} />
+            <span>Add New Product</span>
+          </button>
+        </div>
       </div>
 
       {feedback && (
@@ -561,6 +546,92 @@ export default function AdminProductsPage() {
                 label="Product Image URL (Optional)"
                 placeholder="https://example.com/product-screenshot.jpg"
               />
+
+              {/* Expandable SEO Settings */}
+              <div className="border border-white/5 rounded-2xl p-4 bg-surface-base/30 space-y-4">
+                <h3 className="text-xs font-bold text-accent uppercase tracking-wider">
+                  SEO & Meta Configuration (Search Optimization)
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
+                      SEO Title Override
+                    </label>
+                    <input
+                      type="text"
+                      value={editingProduct.seoTitle || ""}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, seoTitle: e.target.value })}
+                      placeholder="e.g. Best Business CRM Software Solution"
+                      className="w-full bg-surface-base border border-white/10 px-3.5 py-2.5 rounded-xl text-xs text-white outline-none focus:border-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
+                      Canonical URL Override
+                    </label>
+                    <input
+                      type="text"
+                      value={editingProduct.seoCanonical || ""}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, seoCanonical: e.target.value })}
+                      placeholder="https://example.com/custom-canonical"
+                      className="w-full bg-surface-base border border-white/10 px-3.5 py-2.5 rounded-xl text-xs text-white outline-none focus:border-accent"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
+                    Meta Description Override
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={editingProduct.seoDescription || ""}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, seoDescription: e.target.value })}
+                    placeholder="Custom meta description for search result snippets..."
+                    className="w-full bg-surface-base border border-white/10 p-3 rounded-xl text-xs text-white outline-none focus:border-accent resize-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
+                      Social Preview (OG) Image URL
+                    </label>
+                    <input
+                      type="text"
+                      value={editingProduct.seoOgImage || ""}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, seoOgImage: e.target.value })}
+                      placeholder="https://example.com/og-image.jpg"
+                      className="w-full bg-surface-base border border-white/10 px-3.5 py-2.5 rounded-xl text-xs text-white outline-none focus:border-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
+                      Schema Markup Type
+                    </label>
+                    <select
+                      value={editingProduct.schemaType || "SoftwareApplication"}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, schemaType: e.target.value })}
+                      className="w-full bg-surface-base border border-white/10 px-3.5 py-2.5 rounded-xl text-xs text-white outline-none focus:border-accent"
+                    >
+                      <option value="SoftwareApplication">SoftwareApplication Schema</option>
+                      <option value="Product">Product Schema</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <label className="text-xs font-bold text-white flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(editingProduct.seoNoindex)}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, seoNoindex: e.target.checked })}
+                      className="w-4 h-4 accent-accent rounded cursor-pointer"
+                    />
+                    Search Engine Noindex (Hide page from search results)
+                  </label>
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>

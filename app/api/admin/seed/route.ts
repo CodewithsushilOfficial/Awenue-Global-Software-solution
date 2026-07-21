@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { adminAuth, adminDb, ensureServerSignedIn } from "@/lib/firebase-admin";
 
 export async function POST(request: NextRequest) {
   try {
     const adminEmail = (process.env.ADMIN_EMAIL || "Codewithsushil7236@gmail.com").toLowerCase();
     const body = await request.json().catch(() => ({}));
     const password = body.password || "Sushil@7236";
+
+    // Attempt to sign in fallback client if user exists
+    await ensureServerSignedIn().catch(() => {});
 
     let userRecord;
     try {
@@ -55,3 +58,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: errorDetails || "Failed to seed admin user." }, { status: 500 });
   }
 }
+

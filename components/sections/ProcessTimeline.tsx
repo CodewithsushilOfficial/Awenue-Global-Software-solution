@@ -5,10 +5,13 @@ import Image from "next/image";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { motion } from "motion/react";
-import {
-  Search, Microscope, Map, Palette, Code2,
-  FlaskConical, Rocket, TrendingUp, Quote, Sparkles, CheckCircle2,
-} from "lucide-react";
+import { Quote, Sparkles, CheckCircle2 } from "lucide-react";
+import * as Icons from "lucide-react";
+
+function getIconComponent(name: string) {
+  const IconComponent = (Icons as any)[name];
+  return IconComponent || Icons.HelpCircle;
+}
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -17,7 +20,7 @@ const STEPS = [
   {
     num: "01",
     name: "Discover",
-    icon: Search,
+    icon: Icons.Search,
     desc: "We dive deep into your business goals, target audience, and project scope to align on clear objectives.",
     highlights: ["Scope & Goals Alignment", "Requirement Matrix"],
     image: "/images/process/discover.jpg",
@@ -29,7 +32,7 @@ const STEPS = [
   {
     num: "02",
     name: "Research",
-    icon: Microscope,
+    icon: Icons.Microscope,
     desc: "We analyze market trends, competitor strategies, and evaluate the ideal technology stack for your product.",
     highlights: ["Competitor Intelligence", "Tech Architecture Audit"],
     image: "/images/process/research.jpg",
@@ -41,7 +44,7 @@ const STEPS = [
   {
     num: "03",
     name: "Strategy",
-    icon: Map,
+    icon: Icons.Map,
     desc: "We build an actionable product roadmap, sprint plans, and system architecture before writing code.",
     highlights: ["Sprint & Milestone Roadmap", "System Design Blueprint"],
     image: "/images/digital_growth.webp",
@@ -53,7 +56,7 @@ const STEPS = [
   {
     num: "04",
     name: "Design",
-    icon: Palette,
+    icon: Icons.Palette,
     desc: "We create interactive wireframes, modern UI component libraries, and polished high-fidelity prototypes.",
     highlights: ["Interactive Prototypes", "Design System & Tokens"],
     image: "/images/web_design.webp",
@@ -65,7 +68,7 @@ const STEPS = [
   {
     num: "05",
     name: "Develop",
-    icon: Code2,
+    icon: Icons.Code2,
     desc: "We build your product using clean code, scalable APIs, and modern frameworks with weekly staging builds.",
     highlights: ["Weekly Staging Previews", "Clean & Scalable Code"],
     image: "/images/services/web-dev.jpg",
@@ -77,7 +80,7 @@ const STEPS = [
   {
     num: "06",
     name: "Test",
-    icon: FlaskConical,
+    icon: Icons.FlaskConical,
     desc: "We perform rigorous quality assurance, cross-browser testing, security audits, and performance tuning.",
     highlights: ["End-to-End QA Testing", "Security & Load Audits"],
     image: "/images/mobile_app.webp",
@@ -89,7 +92,7 @@ const STEPS = [
   {
     num: "07",
     name: "Launch",
-    icon: Rocket,
+    icon: Icons.Rocket,
     desc: "We deploy your solution to production cloud infrastructure with zero downtime and real-time monitoring.",
     highlights: ["Zero-Downtime Deployment", "Cloud Infra Setup"],
     image: "/images/services/saas.jpg",
@@ -101,7 +104,7 @@ const STEPS = [
   {
     num: "08",
     name: "Grow",
-    icon: TrendingUp,
+    icon: Icons.TrendingUp,
     desc: "We continuously optimize, scale server capacity, add new features, and provide long-term technical support.",
     highlights: ["Continuous Upgrades", "24/7 SLA Support"],
     image: "/images/services/ai.jpg",
@@ -488,10 +491,10 @@ function QuoteBlock() {
 }
 
 // ─── MOBILE TIMELINE ──────────────────────────────────────────────────────────
-function MobileTimeline() {
+function MobileTimeline({ steps }: { steps: readonly any[] }) {
   return (
     <div className="lg:hidden relative pl-8 border-l border-accent/20 space-y-8">
-      {STEPS.map((step) => {
+      {steps.map((step) => {
         const Icon = step.icon;
         return (
           <div key={step.num} className="relative">
@@ -556,7 +559,7 @@ function MobileTimeline() {
                 </div>
                 <p className="text-xs text-white/70 leading-relaxed mb-3">{step.desc}</p>
                 <div className="grid grid-cols-1 gap-1 pt-2 border-t border-white/10">
-                  {step.highlights.map((h, idx) => (
+                  {step.highlights.map((h: string, idx: number) => (
                     <div key={idx} className="flex items-center gap-2">
                       <CheckCircle2 size={11} style={{ color: step.color }} />
                       <span className="text-[11px] font-medium text-white/80">{h}</span>
@@ -573,7 +576,14 @@ function MobileTimeline() {
 }
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
-export default function ProcessTimeline() {
+export default function ProcessTimeline({ initialSteps }: { initialSteps?: any[] }) {
+  const steps = (initialSteps && initialSteps.length > 0)
+    ? initialSteps.map((step) => ({
+        ...step,
+        icon: step.iconName ? getIconComponent(step.iconName) : (Icons as any)[step.iconName || step.name] || Icons.HelpCircle
+      }))
+    : STEPS;
+
   return (
     <section id="process" className="bg-surface-base text-text-secondary py-24 sm:py-32 relative overflow-hidden">
       {/* Section bg glow */}
@@ -595,7 +605,7 @@ export default function ProcessTimeline() {
               columnGap: "24px",
             }}
           >
-            {STEPS.map((step, i) => {
+            {steps.map((step, i) => {
               const isLeft = step.side === "left";
               return (
                 <div key={`step-row-${step.num}`} className="contents">
@@ -624,7 +634,7 @@ export default function ProcessTimeline() {
         </div>
 
         {/* ── MOBILE TIMELINE ── */}
-        <MobileTimeline />
+        <MobileTimeline steps={steps} />
 
         {/* Quote */}
         <QuoteBlock />

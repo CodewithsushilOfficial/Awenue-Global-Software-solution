@@ -13,6 +13,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "weekly",
       priority: 1.0,
     },
+    {
+      url: `${baseUrl}/contact`,
+      lastModified: new Date(),
+      changeFrequency: "monthly",
+      priority: 0.9,
+    },
   ];
 
   try {
@@ -26,11 +32,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     if (!servicesSnap.empty) {
       servicesSnap.forEach((docSnap) => {
         const data = docSnap.data();
-        if (data.published !== false && data.slug) {
+        if (data.published !== false && data.slug && !data.seoNoindex) {
           routes.push({
             url: `${baseUrl}/services/${data.slug}`,
             lastModified: data.updatedAt ? new Date(data.updatedAt) : new Date(),
-            changeFrequency: "monthly" as const,
+            changeFrequency: "monthly",
             priority: 0.8,
           });
         }
@@ -41,11 +47,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     if (!productsSnap.empty) {
       productsSnap.forEach((docSnap) => {
         const data = docSnap.data();
-        if (data.published !== false && data.slug) {
+        if (data.published !== false && data.slug && !data.seoNoindex) {
           routes.push({
             url: `${baseUrl}/products/${data.slug}`,
             lastModified: data.updatedAt ? new Date(data.updatedAt) : new Date(),
-            changeFrequency: "monthly" as const,
+            changeFrequency: "monthly",
             priority: 0.8,
           });
         }
@@ -56,11 +62,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     if (!portfolioSnap.empty) {
       portfolioSnap.forEach((docSnap) => {
         const data = docSnap.data();
-        if (data.published !== false && data.slug) {
+        if (data.published !== false && data.slug && !data.seoNoindex) {
           routes.push({
             url: `${baseUrl}/portfolio/${data.slug}`,
             lastModified: data.updatedAt ? new Date(data.updatedAt) : new Date(),
-            changeFrequency: "monthly" as const,
+            changeFrequency: "monthly",
             priority: 0.7,
           });
         }

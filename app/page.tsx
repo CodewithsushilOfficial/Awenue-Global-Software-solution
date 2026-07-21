@@ -20,14 +20,16 @@ export default async function Home() {
   let portfolioProjects: any[] = [];
   let homepageContent: any = null;
   let socialLinks: any[] = [];
+  let processSteps: any[] = [];
 
   try {
-    const [servicesSnap, productsSnap, portfolioSnap, contentSnap, socialSnap] = await Promise.all([
+    const [servicesSnap, productsSnap, portfolioSnap, contentSnap, socialSnap, processSnap] = await Promise.all([
       getDocs(collection(db, "services")),
       getDocs(collection(db, "products")),
       getDocs(collection(db, "portfolioProjects")),
       getDoc(doc(db, "websiteContent", "homepage")),
       getDocs(collection(db, "socialLinks")),
+      getDocs(collection(db, "processSteps")),
     ]);
 
     if (!servicesSnap.empty) {
@@ -76,6 +78,15 @@ export default async function Home() {
       // Sort by displayOrder ascending
       socialLinks.sort((a, b) => (Number(a.displayOrder) || 0) - (Number(b.displayOrder) || 0));
     }
+
+    if (!processSnap.empty) {
+      processSnap.forEach((docSnap) => {
+        const data = docSnap.data();
+        processSteps.push({ id: docSnap.id, ...data });
+      });
+      // Sort by displayOrder ascending
+      processSteps.sort((a, b) => (Number(a.displayOrder) || 0) - (Number(b.displayOrder) || 0));
+    }
   } catch (err) {
     console.error("[SERVER FETCH] Failed to load homepage CMS content:", err);
   }
@@ -86,6 +97,7 @@ export default async function Home() {
   const safePortfolio = JSON.parse(JSON.stringify(portfolioProjects));
   const safeContent = homepageContent ? JSON.parse(JSON.stringify(homepageContent)) : null;
   const safeSocialLinks = JSON.parse(JSON.stringify(socialLinks));
+  const safeProcessSteps = JSON.parse(JSON.stringify(processSteps));
 
   // Extract content chunks for individual components
   const heroCmsContent = safeContent
@@ -127,7 +139,7 @@ export default async function Home() {
         <Services initialServices={safeServices} />
         <Products initialProducts={safeProducts} />
         <Portfolio initialProjects={safePortfolio} />
-        <ProcessTimeline />
+        <ProcessTimeline initialSteps={safeProcessSteps} />
         <FinalCTA initialCmsContent={finalCtaCmsContent} />
       </main>
       <Footer initialCmsContent={footerCmsContent} initialSocialLinks={safeSocialLinks} />
