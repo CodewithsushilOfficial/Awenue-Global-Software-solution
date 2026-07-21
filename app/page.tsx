@@ -1,4 +1,5 @@
 import Navigation from "@/components/sections/Navigation";
+import GSAPScrollEffects from "@/components/motion/GSAPScrollEffects";
 import Hero from "@/components/sections/Hero";
 import TrustBar from "@/components/sections/TrustBar";
 import Services from "@/components/sections/Services";
@@ -157,6 +158,7 @@ export default async function Home() {
 
   return (
     <>
+      <GSAPScrollEffects />
       <Navigation />
       <main className="grow">
         <Hero initialCmsContent={heroCmsContent} />

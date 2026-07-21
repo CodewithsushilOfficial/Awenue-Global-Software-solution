@@ -66,27 +66,6 @@ export default function AdminProductsPage() {
         list.push({ ...docSnap.data(), id: docSnap.id } as ProductItem);
       });
 
-      if (list.length === 0) {
-        // Auto-seed via the dedicated seed-products API
-        try {
-          const seedRes = await fetch("/api/admin/seed-products", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ force: false }),
-          });
-          if (seedRes.ok) {
-            // Re-fetch after seeding
-            const q2 = query(collection(db, "products"), orderBy("displayOrder", "asc"));
-            const snap2 = await getDocs(q2);
-            snap2.forEach((docSnap) => {
-              list.push({ ...docSnap.data(), id: docSnap.id } as ProductItem);
-            });
-          }
-        } catch (seedErr) {
-          console.warn("Auto-seed products failed:", seedErr);
-        }
-      }
-
       setProducts(list);
     } catch (err) {
       console.error("Error fetching products:", err);

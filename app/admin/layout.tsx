@@ -219,28 +219,40 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Mobile Nav Overlay */}
       {isMobileMenuOpen && (
         <div
-          className="fixed inset-0 bg-surface-base/80 backdrop-blur-md z-40 lg:hidden"
+          className="fixed inset-0 bg-surface-base/80 backdrop-blur-md z-40 lg:hidden transition-opacity duration-300"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
 
       {/* Mobile Sidebar Drawer */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 w-72 bg-surface-raised border-r border-border-dark flex flex-col transition-transform duration-300 lg:hidden ${
+        className={`fixed top-0 bottom-0 left-0 z-50 w-72 sm:w-80 bg-surface-raised border-r border-border-dark flex flex-col transition-transform duration-300 ease-in-out lg:hidden shadow-2xl ${
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="p-5 border-b border-border-dark flex items-center justify-between">
-          <span className="text-lg font-black text-white">AWENUE Admin</span>
+        <div className="p-4 sm:p-5 border-b border-border-dark flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Link
+              href="/admin/dashboard"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="text-base font-black tracking-wider text-white"
+            >
+              AWEN<span className="text-accent">UE</span> CMS
+            </Link>
+            <span className="text-[9px] font-extrabold text-accent bg-accent/10 border border-accent/30 px-2 py-0.5 rounded">
+              ADMIN
+            </span>
+          </div>
           <button
             onClick={() => setIsMobileMenuOpen(false)}
-            className="p-1 text-text-muted hover:text-white"
+            className="p-2 text-text-muted hover:text-white rounded-lg hover:bg-surface-base transition-colors"
+            aria-label="Close menu"
           >
             <X size={20} />
           </button>
         </div>
 
-        <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
+        <nav className="flex-1 p-3 space-y-4 overflow-y-auto custom-scrollbar">
           {navGroups.map((group) => (
             <div key={group.label} className="space-y-1">
               <span className="px-3 text-[10px] font-black tracking-wider text-text-muted/60 uppercase block mb-1">
@@ -254,13 +266,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     key={item.name}
                     href={item.href}
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
                       isActive
-                        ? "bg-accent text-surface-base"
+                        ? "bg-accent text-surface-base shadow-md"
                         : "text-text-muted hover:text-white hover:bg-surface-base"
                     }`}
                   >
-                    <Icon size={15} />
+                    <Icon size={16} />
                     <span>{item.name}</span>
                   </Link>
                 );
@@ -269,10 +281,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           ))}
         </nav>
 
-        <div className="p-3 border-t border-border-dark">
+        <div className="p-4 border-t border-border-dark space-y-3">
+          <div className="px-3 py-2 bg-surface-base rounded-xl border border-white/10">
+            <span className="text-[10px] text-text-muted font-bold block">Logged in as</span>
+            <span className="text-xs text-white font-bold truncate block">{admin?.email || "Admin User"}</span>
+          </div>
           <button
             onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 text-xs font-bold"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 text-xs font-bold transition-colors cursor-pointer"
           >
             <LogOut size={14} />
             <span>Sign Out</span>
@@ -281,35 +297,44 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
-        {/* Top Header */}
-        <header className="h-16 bg-surface-raised border-b border-border-dark px-6 flex items-center justify-between sticky top-0 z-30">
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen max-w-full">
+        {/* Top Header Navbar */}
+        <header className="h-16 bg-surface-raised/95 backdrop-blur-md border-b border-border-dark px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsMobileMenuOpen(true)}
-              className="lg:hidden p-2 text-text-muted hover:text-white"
+              className="lg:hidden p-2 text-text-muted hover:text-white rounded-lg bg-surface-base border border-white/10 transition-colors"
+              aria-label="Open mobile menu"
             >
               <Menu size={20} />
             </button>
-            <span className="text-sm font-extrabold text-white">Admin Control Panel</span>
+            <div className="flex items-center gap-2">
+              <Link href="/admin/dashboard" className="text-sm font-black tracking-wider text-white lg:hidden">
+                AWEN<span className="text-accent">UE</span> CMS
+              </Link>
+              <span className="hidden sm:inline text-xs font-extrabold text-white">
+                Admin Control Panel
+              </span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <Link
               href="/"
               target="_blank"
-              className="text-xs text-accent font-bold hover:underline hidden sm:block"
+              className="text-xs text-accent font-extrabold hover:underline flex items-center gap-1 bg-accent/10 border border-accent/30 px-3 py-1.5 rounded-lg transition-colors"
             >
-              View Live Website &rarr;
+              <span>View Site</span>
+              <span className="hidden sm:inline">&rarr;</span>
             </Link>
             <div className="flex items-center gap-2 text-xs text-text-muted">
-              <ShieldCheck size={16} className="text-accent" />
-              <span className="hidden sm:inline">Protected Admin Session</span>
+              <ShieldCheck size={16} className="text-accent shrink-0" />
+              <span className="hidden md:inline">Protected Session</span>
             </div>
           </div>
         </header>
 
-        <main className="flex-1 p-6 sm:p-8 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto w-full max-w-full min-w-0">
           {!isRouteAllowed ? (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-surface-raised/40 border border-rose-500/20 rounded-3xl">
               <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center mb-4">
