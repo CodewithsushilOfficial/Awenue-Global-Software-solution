@@ -157,19 +157,20 @@ export default function TrustBar({ initialTechnologies }: { initialTechnologies?
         </div>
 
         {/* Tech Stack Heading & Subtitle Content */}
-        <div className="mt-20 pt-16 border-t border-border-dark/60 max-w-3xl text-center mx-auto">
+        <div className="mt-20 pt-16 border-t border-border-dark/60 max-w-4xl text-center mx-auto">
           <RevealOnScroll delay={0.1}>
             <span className="text-accent text-eyebrow block mb-3">TECH STACK</span>
           </RevealOnScroll>
           <RevealOnScroll delay={0.15}>
-            <h2 className="text-section-title mb-4">
-              Built With a{" "}
-              <span className="text-accent">Trusted Technology Stack</span>
+            <h2 className="text-section-title mb-4 sm:whitespace-nowrap text-white">
+              Built With a Trusted{" "}
+              <span className="text-accent">Technology Stack</span>
             </h2>
           </RevealOnScroll>
           <RevealOnScroll delay={0.2}>
-            <p className="text-text-muted text-body-lg max-w-xl mx-auto">
-              We build scalable, secure, and high-performance digital products using industry-leading technologies trusted by startups, enterprises, and global organizations.
+            <p className="text-text-muted text-body-lg max-w-4xl sm:max-w-5xl mx-auto leading-relaxed">
+              Powered by industry-leading technologies, we develop secure, scalable, and future-ready<br className="hidden sm:block" />
+              digital solutions that help businesses innovate, grow, and succeed with confidence.
             </p>
           </RevealOnScroll>
         </div>
