@@ -42,6 +42,7 @@ export default function RootLayout({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
+        <meta name="google-site-verification" content="hVtrtXlVhE4krp56ab8RaEDILwPAbJXHXRL8wn-mHEc" />
       </head>
       <body className="min-h-full bg-surface-base text-text-secondary flex flex-col selection:bg-accent selection:text-surface-base">
         <AuthProvider>
