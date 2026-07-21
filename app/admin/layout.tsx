@@ -28,6 +28,8 @@ import {
   ArrowLeft,
   Cpu,
   Share2,
+  Globe,
+  ExternalLink,
 } from "lucide-react";
 
 interface NavItem {
@@ -222,14 +224,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Mobile Nav Overlay */}
       {isMobileMenuOpen && (
         <div
-          className="fixed inset-0 bg-surface-base/80 backdrop-blur-md z-40 lg:hidden transition-opacity duration-300"
+          className="fixed inset-0 bg-black/80 backdrop-blur-md z-40 lg:hidden transition-opacity duration-300"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
 
       {/* Mobile Sidebar Drawer */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 w-72 sm:w-80 bg-surface-raised border-r border-border-dark flex flex-col transition-transform duration-300 ease-in-out lg:hidden shadow-2xl ${
+        className={`fixed top-0 bottom-0 left-0 z-50 w-72 sm:w-80 bg-surface-raised border-r border-border-dark flex flex-col transition-transform duration-300 ease-out lg:hidden shadow-2xl ${
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -248,10 +250,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
           <button
             onClick={() => setIsMobileMenuOpen(false)}
-            className="p-2 text-text-muted hover:text-white rounded-lg hover:bg-surface-base transition-colors"
+            className="p-2 text-text-muted hover:text-white rounded-xl bg-surface-base border border-white/10 transition-colors cursor-pointer"
             aria-label="Close menu"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
@@ -271,7 +273,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     onClick={() => setIsMobileMenuOpen(false)}
                     className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
                       isActive
-                        ? "bg-accent text-surface-base shadow-md"
+                        ? "bg-accent text-surface-base shadow-glow"
                         : "text-text-muted hover:text-white hover:bg-surface-base"
                     }`}
                   >
@@ -302,37 +304,55 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 min-h-screen max-w-full">
         {/* Top Header Navbar */}
-        <header className="h-16 bg-surface-raised/95 backdrop-blur-md border-b border-border-dark px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30">
-          <div className="flex items-center gap-3">
+        <header className="h-[68px] sm:h-[72px] bg-surface-raised/95 backdrop-blur-xl border-b border-border-dark px-3.5 sm:px-6 lg:px-8 flex items-center justify-between sticky top-0 z-30 shadow-lg">
+          {/* Left: Mobile Hamburger & Page Brand Title */}
+          <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
             <button
               onClick={() => setIsMobileMenuOpen(true)}
-              className="lg:hidden p-2 text-text-muted hover:text-white rounded-lg bg-surface-base border border-white/10 transition-colors"
+              className="lg:hidden p-2.5 sm:p-3 rounded-xl bg-surface-base border border-white/10 text-text-muted hover:text-white hover:border-accent/40 active:scale-95 transition-all cursor-pointer shrink-0"
               aria-label="Open mobile menu"
             >
               <Menu size={20} />
             </button>
-            <div className="flex items-center gap-2">
-              <Link href="/admin/dashboard" className="text-sm font-black tracking-wider text-white lg:hidden">
-                AWEN<span className="text-accent">UE</span> CMS
+
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <Link href="/admin/dashboard" className="flex items-center gap-1.5 sm:gap-2 shrink-0 group">
+                <span className="text-base sm:text-lg font-black tracking-wider text-white group-hover:text-accent transition-colors">
+                  AWEN<span className="text-accent">UE</span>
+                </span>
+                <span className="text-[10px] sm:text-xs font-black text-accent bg-accent/15 border border-accent/30 px-2 py-0.5 rounded-md font-mono tracking-widest uppercase shadow-sm">
+                  CMS
+                </span>
               </Link>
-              <span className="hidden sm:inline text-xs font-extrabold text-white">
+
+              <span className="hidden sm:inline-block text-border-dark font-light text-base">/</span>
+
+              <span className="hidden sm:inline-block text-xs sm:text-sm font-extrabold text-text-muted/90 tracking-wide truncate">
                 Admin Control Panel
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 sm:gap-4">
+          {/* Right: Actions & Session Status (Boxed Action Cards) */}
+          <div className="flex items-center gap-2 sm:gap-3.5 shrink-0">
+            {/* View Site Box Card */}
             <Link
               href="/"
               target="_blank"
-              className="text-xs text-accent font-extrabold hover:underline flex items-center gap-1 bg-accent/10 border border-accent/30 px-3 py-1.5 rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-extrabold text-accent bg-accent/10 hover:bg-accent/20 border border-accent/30 hover:border-accent/50 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-all shadow-sm shrink-0 cursor-pointer active:scale-95"
             >
+              <Globe size={15} className="shrink-0" />
               <span>View Site</span>
-              <span className="hidden sm:inline">&rarr;</span>
+              <ExternalLink size={12} className="hidden sm:inline shrink-0 opacity-70" />
             </Link>
-            <div className="flex items-center gap-2 text-xs text-text-muted">
-              <ShieldCheck size={16} className="text-accent shrink-0" />
-              <span className="hidden md:inline">Protected Session</span>
+
+            {/* Protected Session Box Card */}
+            <div className="inline-flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-extrabold text-white bg-surface-base border border-white/10 px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl shrink-0 shadow-sm">
+              <div className="relative flex items-center justify-center">
+                <ShieldCheck size={16} className="text-accent shrink-0" />
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-accent animate-pulse" />
+              </div>
+              <span className="hidden sm:inline text-xs font-bold text-white">Protected</span>
             </div>
           </div>
         </header>
