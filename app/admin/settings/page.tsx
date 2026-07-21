@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 import { Save, CheckCircle2, Loader2, Lock } from "lucide-react";
 
 interface AdminSettingsState {
@@ -10,19 +10,13 @@ interface AdminSettingsState {
   contactPhone: string;
   whatsappNumber: string;
   businessAddress: string;
-  linkedinUrl: string;
-  twitterUrl: string;
-  githubUrl: string;
 }
 
 const DEFAULT_SETTINGS: AdminSettingsState = {
-  businessEmail: "hello@awenue.io",
+  businessEmail: "awenueglobalsoftwaresolutions@gmail.com",
   contactPhone: "+91 98765 43210",
   whatsappNumber: "+91 98765 43210",
   businessAddress: "Varanasi, Uttar Pradesh, India",
-  linkedinUrl: "https://linkedin.com/company/awenue",
-  twitterUrl: "https://x.com/awenue",
-  githubUrl: "https://github.com/awenue",
 };
 
 export default function AdminSettingsPage() {
@@ -32,25 +26,36 @@ export default function AdminSettingsPage() {
   const [feedback, setFeedback] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadSettings() {
-      try {
-        const docRef = doc(db, "adminSettings", "general");
-        const snap = await getDoc(docRef);
-        if (snap.exists()) {
-          setSettings({ ...DEFAULT_SETTINGS, ...snap.data() });
-        } else {
-          const altSnap = await getDoc(doc(db, "settings", "general"));
-          if (altSnap.exists()) {
-            setSettings({ ...DEFAULT_SETTINGS, ...altSnap.data() });
+    let active = true;
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (!active) return;
+
+      async function loadSettings() {
+        try {
+          const docRef = doc(db, "adminSettings", "general");
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+            setSettings({ ...DEFAULT_SETTINGS, ...snap.data() });
+          } else {
+            const altSnap = await getDoc(doc(db, "settings", "general"));
+            if (altSnap.exists()) {
+              setSettings({ ...DEFAULT_SETTINGS, ...altSnap.data() });
+            }
           }
+        } catch (err) {
+          console.warn("Using default admin settings:", err);
+        } finally {
+          if (active) setLoading(false);
         }
-      } catch (err) {
-        console.warn("Using default admin settings:", err);
-      } finally {
-        setLoading(false);
       }
-    }
-    loadSettings();
+
+      loadSettings();
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -185,49 +190,7 @@ export default function AdminSettingsPage() {
             </div>
           </div>
 
-          <div className="pt-3 border-t border-white/10 space-y-4">
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-white">
-              Social Media Handles
-            </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
-                  LinkedIn URL
-                </label>
-                <input
-                  type="url"
-                  value={settings.linkedinUrl}
-                  onChange={(e) => setSettings({ ...settings, linkedinUrl: e.target.value })}
-                  className="w-full bg-surface-base border border-border-dark px-3 py-2 rounded-xl text-xs text-white outline-none focus:border-accent"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
-                  X / Twitter URL
-                </label>
-                <input
-                  type="url"
-                  value={settings.twitterUrl}
-                  onChange={(e) => setSettings({ ...settings, twitterUrl: e.target.value })}
-                  className="w-full bg-surface-base border border-border-dark px-3 py-2 rounded-xl text-xs text-white outline-none focus:border-accent"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
-                  GitHub URL
-                </label>
-                <input
-                  type="url"
-                  value={settings.githubUrl}
-                  onChange={(e) => setSettings({ ...settings, githubUrl: e.target.value })}
-                  className="w-full bg-surface-base border border-border-dark px-3 py-2 rounded-xl text-xs text-white outline-none focus:border-accent"
-                />
-              </div>
-            </div>
-          </div>
 
           <div className="flex justify-end pt-4 border-t border-white/10">
             <button

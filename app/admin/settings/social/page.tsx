@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { collection, getDocs, doc, query } from "firebase/firestore";
+import { collection, getDocs, doc, setDoc, deleteDoc, query } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import {
   Plus,
@@ -126,7 +126,17 @@ export default function AdminSocialSettingsPage() {
       const isNew = !editingLink.id;
       const docId = isNew 
         ? `social-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
-        : editingLink.id;
+        : editingLink.id!;
+
+      const payload = {
+        platform: editingLink.platform,
+        displayName: editingLink.displayName,
+        url: editingLink.url,
+        isActive: editingLink.isActive,
+        displayOrder: Number(editingLink.displayOrder) || 1,
+        openInNewTab: editingLink.openInNewTab,
+        ariaLabel: editingLink.ariaLabel,
+      };
 
       const res = await fetch("/api/admin/cms", {
         method: "POST",
@@ -135,22 +145,27 @@ export default function AdminSocialSettingsPage() {
           action: isNew ? "add" : "update",
           collectionName: "socialLinks",
           docId: isNew ? undefined : docId,
-          data: {
-            platform: editingLink.platform,
-            displayName: editingLink.displayName,
-            url: editingLink.url,
-            isActive: editingLink.isActive,
-            displayOrder: Number(editingLink.displayOrder) || 1,
-            openInNewTab: editingLink.openInNewTab,
-            ariaLabel: editingLink.ariaLabel,
-          },
+          data: payload,
         }),
       });
 
       const resData = await res.json();
 
-      if (!res.ok) {
-        throw new Error(resData?.error || "Failed to save record.");
+      if (!res.ok || resData?.useClientFallback) {
+        // Fallback to client-side write
+        const docRef = doc(db, "socialLinks", docId);
+        await setDoc(
+          docRef,
+          {
+            ...payload,
+            createdAt: editingLink.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+        
+        // Trigger cache revalidation on the server as well
+        fetch("/api/revalidate", { method: "POST" }).catch(() => {});
       }
 
       showFeedback("success", `Social link ${isNew ? "added" : "updated"} successfully!`);
@@ -180,9 +195,17 @@ export default function AdminSocialSettingsPage() {
         }),
       });
 
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData?.error || "Failed to toggle status.");
+      const resData = await res.json();
+
+      if (!res.ok || resData?.useClientFallback) {
+        const { updateDoc } = await import("firebase/firestore");
+        await updateDoc(doc(db, "socialLinks", item.id), {
+          isActive: updatedStatus,
+          updatedAt: new Date().toISOString(),
+        });
+        
+        // Trigger cache revalidation
+        fetch("/api/revalidate", { method: "POST" }).catch(() => {});
       }
 
       setSocialLinks((prev) =>
@@ -215,28 +238,40 @@ export default function AdminSocialSettingsPage() {
 
     try {
       // Save changes to database
-      await Promise.all([
-        fetch("/api/admin/cms", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "update",
-            collectionName: "socialLinks",
-            docId: current.id,
-            data: { displayOrder: current.displayOrder },
-          }),
+      const res1 = await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update",
+          collectionName: "socialLinks",
+          docId: current.id,
+          data: { displayOrder: current.displayOrder },
         }),
-        fetch("/api/admin/cms", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "update",
-            collectionName: "socialLinks",
-            docId: target.id,
-            data: { displayOrder: target.displayOrder },
-          }),
+      });
+      const resData1 = await res1.json();
+
+      const res2 = await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update",
+          collectionName: "socialLinks",
+          docId: target.id,
+          data: { displayOrder: target.displayOrder },
         }),
-      ]);
+      });
+      const resData2 = await res2.json();
+
+      if (!res1.ok || resData1?.useClientFallback || !res2.ok || resData2?.useClientFallback) {
+        const { updateDoc } = await import("firebase/firestore");
+        await Promise.all([
+          updateDoc(doc(db, "socialLinks", current.id), { displayOrder: current.displayOrder }),
+          updateDoc(doc(db, "socialLinks", target.id), { displayOrder: target.displayOrder }),
+        ]);
+        
+        // Trigger cache revalidation
+        fetch("/api/revalidate", { method: "POST" }).catch(() => {});
+      }
       showFeedback("success", "Display order updated successfully!");
     } catch (err) {
       console.error("Reorder save error:", err);
@@ -257,9 +292,13 @@ export default function AdminSocialSettingsPage() {
         }),
       });
 
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData?.error || "Failed to delete link.");
+      const resData = await res.json();
+
+      if (!res.ok || resData?.useClientFallback) {
+        await deleteDoc(doc(db, "socialLinks", id));
+        
+        // Trigger cache revalidation
+        fetch("/api/revalidate", { method: "POST" }).catch(() => {});
       }
 
       showFeedback("success", "Social link deleted successfully.");

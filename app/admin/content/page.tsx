@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 import { Save, Loader2, CheckCircle2, Sparkles } from "lucide-react";
 import ImageUrlField from "@/components/admin/ImageUrlField";
 
@@ -41,13 +41,6 @@ interface ContentState {
   footerWhatsapp: string;
   footerCopyright: string;
 
-  // Social Links
-  linkedinUrl: string;
-  instagramUrl: string;
-  githubUrl: string;
-  facebookUrl: string;
-  xUrl: string;
-  youtubeUrl: string;
 }
 
 const DEFAULT_CONTENT: ContentState = {
@@ -85,12 +78,6 @@ const DEFAULT_CONTENT: ContentState = {
   footerWhatsapp: "+91 98765 43210",
   footerCopyright: "© 2026 Avenue Global Software Solutions. All Rights Reserved.",
 
-  linkedinUrl: "https://linkedin.com/company/awenue",
-  instagramUrl: "https://instagram.com/awenue",
-  githubUrl: "https://github.com/awenue",
-  facebookUrl: "https://facebook.com/awenue",
-  xUrl: "https://x.com/awenue",
-  youtubeUrl: "https://youtube.com/@awenue",
 };
 
 export default function AdminContentPage() {
@@ -100,20 +87,31 @@ export default function AdminContentPage() {
   const [feedback, setFeedback] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadContent() {
-      try {
-        const docRef = doc(db, "websiteContent", "homepage");
-        const snap = await getDoc(docRef);
-        if (snap.exists()) {
-          setContent({ ...DEFAULT_CONTENT, ...snap.data() });
+    let active = true;
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (!active) return;
+
+      async function loadContent() {
+        try {
+          const docRef = doc(db, "websiteContent", "homepage");
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+            setContent({ ...DEFAULT_CONTENT, ...snap.data() });
+          }
+        } catch (err) {
+          console.warn("Using default site content:", err);
+        } finally {
+          if (active) setLoading(false);
         }
-      } catch (err) {
-        console.warn("Using default site content:", err);
-      } finally {
-        setLoading(false);
       }
-    }
-    loadContent();
+
+      loadContent();
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -415,57 +413,6 @@ export default function AdminContentPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-[11px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
-                  LinkedIn URL
-                </label>
-                <input
-                  type="url"
-                  value={content.linkedinUrl}
-                  onChange={(e) => setContent({ ...content, linkedinUrl: e.target.value })}
-                  className="w-full bg-surface-base border border-border-dark px-3.5 py-2.5 rounded-xl text-xs text-white outline-none focus:border-accent"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
-                  Instagram URL
-                </label>
-                <input
-                  type="url"
-                  value={content.instagramUrl}
-                  onChange={(e) => setContent({ ...content, instagramUrl: e.target.value })}
-                  className="w-full bg-surface-base border border-border-dark px-3.5 py-2.5 rounded-xl text-xs text-white outline-none focus:border-accent"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-[11px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
-                  GitHub URL
-                </label>
-                <input
-                  type="url"
-                  value={content.githubUrl}
-                  onChange={(e) => setContent({ ...content, githubUrl: e.target.value })}
-                  className="w-full bg-surface-base border border-border-dark px-3.5 py-2.5 rounded-xl text-xs text-white outline-none focus:border-accent"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-extrabold text-text-muted uppercase tracking-wider block mb-1">
-                  X (Twitter) URL
-                </label>
-                <input
-                  type="url"
-                  value={content.xUrl}
-                  onChange={(e) => setContent({ ...content, xUrl: e.target.value })}
-                  className="w-full bg-surface-base border border-border-dark px-3.5 py-2.5 rounded-xl text-xs text-white outline-none focus:border-accent"
-                />
-              </div>
-            </div>
           </div>
 
           <div className="flex justify-end">
